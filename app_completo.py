@@ -288,86 +288,166 @@ elif relatorio_selecionado == "Status das Famílias":
             df_report['TITLE'] = df_report['TITLE'].fillna(df_report['idfamilia'])
             
             # Métricas detalhadas
-            st.subheader("Métricas por Opção de Pagamento")
+            st.markdown(f"""
+                <h2 style='color: {COLORS["azul"]}; margin-bottom: 1rem;'>
+                    📊 Métricas Detalhadas por Opção de Pagamento
+                </h2>
+            """, unsafe_allow_html=True)
             
-            # Primeira linha - Total e Opções A e B
-            col1, col2, col3 = st.columns(3)
+            # Primeira linha - Totais Gerais
+            col1, col2 = st.columns(2)
+            
+            total_geral = int(df_report['total_atual'].sum())
+            total_familias = len(df_report[df_report['idfamilia'] != 'TOTAL'])
             
             with col1:
-                total_geral = int(df_report['total_atual'].sum())
                 st.metric(
                     "Total de Requerentes",
                     f"{total_geral:,}".replace(",", "."),
-                    help="Total de requerentes em todas as opções"
+                    f"Em {total_familias:,}".replace(",", ".") + " famílias",
+                    help="Número total de requerentes em todas as opções"
                 )
             
             with col2:
+                total_sem_opcao = len(df_report[df_report['pessoas_sem_opcao'].notna()])
+                st.metric(
+                    "Aguardando Definição",
+                    f"{total_sem_opcao:,}".replace(",", "."),
+                    f"{(total_sem_opcao / total_familias * 100):.1f}% das famílias",
+                    help="Famílias que ainda não escolheram uma opção de pagamento"
+                )
+            
+            # Divisor
+            st.markdown("---")
+            
+            # Segunda linha - Opções de Pagamento
+            st.markdown(f"<h3 style='color: {COLORS['azul']}'>Distribuição por Opção</h3>", unsafe_allow_html=True)
+            
+            col1, col2, col3 = st.columns(3)
+            
+            with col1:
                 total_a = int(df_report['A'].sum())
                 st.metric(
                     "Opção A",
                     f"{total_a:,}".replace(",", "."),
-                    f"{(total_a / total_geral * 100):.0f}%" if total_geral > 0 else "0%",
-                    help="Total de requerentes na opção A"
+                    f"{(total_a / total_geral * 100):.1f}% do total",
+                    help="Requerentes que escolheram a Opção A de pagamento"
                 )
+                st.markdown(f"""
+                    <small>
+                        Famílias: {len(df_report[df_report['A'] > 0]):,}<br>
+                        Média por família: {total_a/len(df_report[df_report['A'] > 0]):.1f} requerentes
+                    </small>
+                """.replace(",", "."), unsafe_allow_html=True)
             
-            with col3:
+            with col2:
                 total_b = int(df_report['B'].sum())
                 st.metric(
                     "Opção B",
                     f"{total_b:,}".replace(",", "."),
-                    f"{(total_b / total_geral * 100):.0f}%" if total_geral > 0 else "0%",
-                    help="Total de requerentes na opção B"
+                    f"{(total_b / total_geral * 100):.1f}% do total",
+                    help="Requerentes que escolheram a Opção B de pagamento"
                 )
+                st.markdown(f"""
+                    <small>
+                        Famílias: {len(df_report[df_report['B'] > 0]):,}<br>
+                        Média por família: {total_b/len(df_report[df_report['B'] > 0]):.1f} requerentes
+                    </small>
+                """.replace(",", ".") if len(df_report[df_report['B'] > 0]) > 0 else "<small>Sem famílias nesta opção</small>",
+                unsafe_allow_html=True)
             
-            # Segunda linha - Opções C, D e E
-            col1, col2, col3 = st.columns(3)
-            
-            with col1:
+            with col3:
                 total_c = int(df_report['C'].sum())
                 st.metric(
                     "Opção C",
                     f"{total_c:,}".replace(",", "."),
-                    f"{(total_c / total_geral * 100):.0f}%" if total_geral > 0 else "0%",
-                    help="Total de requerentes na opção C"
+                    f"{(total_c / total_geral * 100):.1f}% do total",
+                    help="Requerentes que escolheram a Opção C de pagamento"
                 )
+                st.markdown(f"""
+                    <small>
+                        Famílias: {len(df_report[df_report['C'] > 0]):,}<br>
+                        Média por família: {total_c/len(df_report[df_report['C'] > 0]):.1f} requerentes
+                    </small>
+                """.replace(",", ".") if len(df_report[df_report['C'] > 0]) > 0 else "<small>Sem famílias nesta opção</small>",
+                unsafe_allow_html=True)
             
-            with col2:
+            col1, col2, col3 = st.columns(3)
+            
+            with col1:
                 total_d = int(df_report['D'].sum())
                 st.metric(
                     "Opção D",
                     f"{total_d:,}".replace(",", "."),
-                    f"{(total_d / total_geral * 100):.0f}%" if total_geral > 0 else "0%",
-                    help="Total de requerentes na opção D"
+                    f"{(total_d / total_geral * 100):.1f}% do total",
+                    help="Requerentes que escolheram a Opção D de pagamento"
                 )
+                st.markdown(f"""
+                    <small>
+                        Famílias: {len(df_report[df_report['D'] > 0]):,}<br>
+                        Média por família: {total_d/len(df_report[df_report['D'] > 0]):.1f} requerentes
+                    </small>
+                """.replace(",", ".") if len(df_report[df_report['D'] > 0]) > 0 else "<small>Sem famílias nesta opção</small>",
+                unsafe_allow_html=True)
             
-            with col3:
+            with col2:
                 total_e = int(df_report['E'].sum())
                 st.metric(
                     "Cancelados (E)",
                     f"{total_e:,}".replace(",", "."),
-                    f"{(total_e / total_geral * 100):.0f}%" if total_geral > 0 else "0%",
-                    help="Total de requerentes que cancelaram"
+                    f"{(total_e / total_geral * 100):.1f}% do total",
+                    help="Requerentes que cancelaram o processo"
                 )
+                st.markdown(f"""
+                    <small>
+                        Famílias: {len(df_report[df_report['E'] > 0]):,}<br>
+                        Média por família: {total_e/len(df_report[df_report['E'] > 0]):.1f} requerentes
+                    </small>
+                """.replace(",", ".") if len(df_report[df_report['E'] > 0]) > 0 else "<small>Sem famílias nesta opção</small>",
+                unsafe_allow_html=True)
             
-            # Terceira linha - Totais agrupados
+            # Divisor
+            st.markdown("---")
+            
+            # Terceira linha - Resumo
+            st.markdown(f"<h3 style='color: {COLORS['azul']}'>Resumo Geral</h3>", unsafe_allow_html=True)
+            
             col1, col2 = st.columns(2)
             
             with col1:
                 total_ativos = total_a + total_b + total_c + total_d
+                familias_ativas = len(df_report[(df_report['A'] > 0) | (df_report['B'] > 0) | 
+                                              (df_report['C'] > 0) | (df_report['D'] > 0)])
                 st.metric(
                     "Total Ativos (A+B+C+D)",
                     f"{total_ativos:,}".replace(",", "."),
-                    f"{(total_ativos / total_geral * 100):.0f}%" if total_geral > 0 else "0%",
+                    f"{(total_ativos / total_geral * 100):.1f}% do total",
                     help="Total de requerentes ativos em todas as opções"
                 )
+                st.markdown(f"""
+                    <small>
+                        Famílias Ativas: {familias_ativas:,}<br>
+                        Média por família: {total_ativos/familias_ativas:.1f} requerentes<br>
+                        {(familias_ativas/total_familias*100):.1f}% das famílias
+                    </small>
+                """.replace(",", "."), unsafe_allow_html=True)
             
             with col2:
+                familias_canceladas = len(df_report[df_report['E'] > 0])
                 st.metric(
                     "Total Cancelados (E)",
                     f"{total_e:,}".replace(",", "."),
-                    f"{(total_e / total_geral * 100):.0f}%" if total_geral > 0 else "0%",
+                    f"{(total_e / total_geral * 100):.1f}% do total",
                     help="Total de requerentes que cancelaram"
                 )
+                st.markdown(f"""
+                    <small>
+                        Famílias Canceladas: {familias_canceladas:,}<br>
+                        Média por família: {total_e/familias_canceladas:.1f} requerentes<br>
+                        {(familias_canceladas/total_familias*100):.1f}% das famílias
+                    </small>
+                """.replace(",", ".") if familias_canceladas > 0 else "<small>Sem famílias canceladas</small>",
+                unsafe_allow_html=True)
             
             # Gráficos
             col1, col2 = st.columns(2)
