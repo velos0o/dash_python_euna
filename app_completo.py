@@ -101,6 +101,12 @@
                     
                     # Preparar dados para exibição
                     df_display = df_report[['TITLE', 'continua', 'cancelou', 'total_membros']].copy()
+                    
+                    # Garantir que as colunas numéricas são números
+                    colunas_numericas = ['continua', 'cancelou', 'total_membros']
+                    for col in colunas_numericas:
+                        df_display[col] = pd.to_numeric(df_display[col], errors='coerce').fillna(0).astype(int)
+                    
                     df_display.columns = ['Família', 'Continua', 'Cancelou', 'Total Membros']
                     
                     # Adicionar status
