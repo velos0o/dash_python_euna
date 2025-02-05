@@ -1,42 +1,81 @@
 def get_family_status_query():
     return """
-    WITH status_atual AS (
+    WITH requerentes_por_familia AS (
         SELECT 
-            idfamilia,
+            familia,
+            COUNT(DISTINCT id) as total_requerentes
+        FROM familiares
+        WHERE is_requerente_principal = 1
+           OR is_conjuge = 1
+           OR (is_familiar = 1 AND is_menor = 0)
+        GROUP BY familia
+    ),
+    status_familia AS (
+        SELECT 
+            e.idfamilia AS ID_Familia,
+            COALESCE(f.nome_familia, 'Sem Nome') AS Nome_Familia,
+            SUM(CASE WHEN e.paymentOption = 'A' THEN 1 ELSE 0 END) AS A,
+            SUM(CASE WHEN e.paymentOption = 'B' THEN 1 ELSE 0 END) AS B,
+            SUM(CASE WHEN e.paymentOption = 'C' THEN 1 ELSE 0 END) AS C,
+            SUM(CASE WHEN e.paymentOption = 'D' THEN 1 ELSE 0 END) AS D,
+            SUM(CASE WHEN e.paymentOption = 'E' THEN 1 ELSE 0 END) AS E,
             GROUP_CONCAT(
                 CASE 
-                    WHEN paymentOption IS NULL OR paymentOption = '' 
+                    WHEN e.paymentOption IS NULL OR e.paymentOption = '' 
                     THEN CONCAT_WS(' | ',
-                        nome_completo,
-                        telefone,
-                        `e-mail`,
-                        CONCAT('Idade: ', TIMESTAMPDIFF(YEAR, birthdate, CURDATE())),
-                        CASE 
-                            WHEN is_menor = 1 THEN 'Menor de idade'
-                            ELSE 'Maior de idade'
-                        END
+                        e.nome_completo,
+                        e.telefone,
+                        e.`e-mail`,
+                        CONCAT('Idade: ', TIMESTAMPDIFF(YEAR, e.birthdate, CURDATE())),
+                        CASE WHEN e.is_menor = 1 THEN 'Menor de idade' ELSE 'Maior de idade' END
                     )
                 END
                 SEPARATOR '\n'
-            ) as pessoas_sem_opcao,
-            COUNT(CASE 
-                WHEN paymentOption IN ('A', 'B', 'C', 'D') THEN 1 
-            END) as continua,
-            COUNT(CASE 
-                WHEN paymentOption = 'E' THEN 1 
-            END) as cancelou,
-            COUNT(*) as total_atual
+            ) as pessoas_sem_opcao
+        FROM euna_familias e
+        LEFT JOIN familiares f ON TRIM(e.idfamilia) = TRIM(f.unique_id)
+        WHERE e.is_menor = 0
+          AND e.isSpecial = 0
+          AND e.hasTechnicalProblems = 0
+        GROUP BY e.idfamilia, f.nome_familia
+    ),
+    totais AS (
+        SELECT 
+            'TOTAL' AS ID_Familia,
+            'Total' AS Nome_Familia,
+            SUM(CASE WHEN paymentOption = 'A' THEN 1 ELSE 0 END) AS A,
+            SUM(CASE WHEN paymentOption = 'B' THEN 1 ELSE 0 END) AS B,
+            SUM(CASE WHEN paymentOption = 'C' THEN 1 ELSE 0 END) AS C,
+            SUM(CASE WHEN paymentOption = 'D' THEN 1 ELSE 0 END) AS D,
+            SUM(CASE WHEN paymentOption = 'E' THEN 1 ELSE 0 END) AS E,
+            NULL as pessoas_sem_opcao
         FROM euna_familias
-        GROUP BY idfamilia
+        WHERE is_menor = 0
+          AND isSpecial = 0
+          AND hasTechnicalProblems = 0
     )
     SELECT 
-        idfamilia,
-        pessoas_sem_opcao,
-        continua,
-        cancelou,
-        total_atual,
-        total_atual as total_esperado
-    FROM status_atual
+        r.ID_Familia as idfamilia,
+        r.Nome_Familia as nome_familia,
+        r.A,
+        r.B,
+        r.C,
+        r.D,
+        r.E,
+        r.pessoas_sem_opcao,
+        (r.A + r.B + r.C + r.D) as continua,
+        r.E as cancelou,
+        (r.A + r.B + r.C + r.D + r.E) as total_atual,
+        COALESCE(rpf.total_requerentes, 0) as total_esperado
+    FROM (
+        SELECT * FROM status_familia
+        UNION ALL
+        SELECT * FROM totais
+    ) r
+    LEFT JOIN requerentes_por_familia rpf ON TRIM(r.ID_Familia) = TRIM(rpf.familia)
+    ORDER BY 
+        CASE WHEN r.Nome_Familia = 'Total' THEN 1 ELSE 0 END,
+        r.ID_Familia
     """
 
 def get_payment_options_query():

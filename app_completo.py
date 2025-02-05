@@ -364,15 +364,21 @@ elif relatorio_selecionado == "Status das Famílias":
             st.subheader("Detalhes das Famílias")
             # Preparar dados para exibição
             df_detalhes = pd.DataFrame({
-                'Família': df_report['TITLE'],
-                'Continuam': df_report['continua'],
-                'Cancelaram': df_report['cancelou'],
+                'Família': df_report['nome_familia'],
+                'A': df_report['A'],
+                'B': df_report['B'],
+                'C': df_report['C'],
+                'D': df_report['D'],
+                'E': df_report['E'],
                 'Total Atual': df_report['total_atual'],
-                'Total Esperado': df_report['total_requerentes_esperado']
+                'Total Esperado': df_report['total_esperado'],
+                'Diferença': df_report['total_esperado'] - df_report['total_atual']
             })
             
-            # Calcular diferença
-            df_detalhes['Diferença'] = df_detalhes['Total Esperado'] - df_detalhes['Total Atual']
+            # Formatar números como inteiros
+            colunas_numericas = ['A', 'B', 'C', 'D', 'E', 'Total Atual', 'Total Esperado', 'Diferença']
+            for col in colunas_numericas:
+                df_detalhes[col] = df_detalhes[col].fillna(0).astype(int)
             
             # Adicionar botão de download
             csv = df_detalhes.to_csv(index=False)
