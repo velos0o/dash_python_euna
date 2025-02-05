@@ -1,11 +1,9 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
-import plotly.graph_objects as go
-import requests
-import mysql.connector
 from datetime import datetime, timedelta
-from queries import get_family_status_query, get_payment_options_query
+from bitrix_api import Bitrix24API
+from database import Database
 
 # Cores personalizadas
 COLORS = {
@@ -76,74 +74,41 @@ st.markdown(
     unsafe_allow_html=True
 )
 
-# Configurações do Bitrix24 (usando secrets)
-BITRIX_BASE_URL = st.secrets["bitrix24_base_url"]
-BITRIX_TOKEN = st.secrets["bitrix24_token"]
-
-def consultar_bitrix(table, filtros=None):
-    """Função para consultar a API do Bitrix24"""
-    url = f"{BITRIX_BASE_URL}?token={BITRIX_TOKEN}&table={table}"
+# Inicializar conexões
+@st.cache_resource
+def get_connections():
+    bitrix = Bitrix24API(
+        base_url=st.secrets["bitrix24_base_url"],
+        token=st.secrets["bitrix24_token"]
+    )
     
-    if filtros:
-        response = requests.post(url, json=filtros)
-    else:
-        response = requests.get(url)
+    db = Database(
+        host=st.secrets["mysql_host"],
+        port=st.secrets["mysql_port"],
+        database=st.secrets["mysql_database"],
+        user=st.secrets["mysql_user"],
+        password=st.secrets["mysql_password"]
+    )
     
-    if response.status_code == 200:
-        return response.json()
-    return None
+    return bitrix, db
 
+bitrix, db = get_connections()
+
+# Funções de dados com cache
 @st.cache_data(ttl=300)  # Cache por 5 minutos
 def get_mysql_data():
-    """Busca dados do MySQL com análise de opções de pagamento"""
-    try:
-        with mysql.connector.connect(
-            host=st.secrets["mysql_host"],
-            port=st.secrets["mysql_port"],
-            database=st.secrets["mysql_database"],
-            user=st.secrets["mysql_user"],
-            password=st.secrets["mysql_password"]
-        ) as conn:
-            # Buscar status das famílias
-            df = pd.read_sql(get_family_status_query(), conn)
-            
-            # Buscar distribuição das opções de pagamento
-            df_options = pd.read_sql(get_payment_options_query(), conn)
-            
-            return df, df_options
-            
-    except Exception as e:
-        st.error(f"Erro ao conectar ao MySQL: {e}")
-        return None, None
+    """Busca dados do MySQL"""
+    df, df_options = db.get_family_data()
+    if df is None:
+        st.error("Erro ao buscar dados do MySQL")
+    return df, df_options
 
 @st.cache_data(ttl=300)  # Cache por 5 minutos
 def get_bitrix_data():
     """Busca dados do Bitrix24"""
-    # 1. Consultar deals da categoria 32
-    filtros_deal = {
-        "dimensionsFilters": [[
-            {
-                "fieldName": "CATEGORY_ID",
-                "values": [32],
-                "type": "INCLUDE",
-                "operator": "EQUALS"
-            }
-        ]]
-    }
-    
-    deals_df = consultar_bitrix("crm_deal", filtros_deal)
-    if not deals_df:
-        return None, None
-    
-    deals_df = pd.DataFrame(deals_df[1:], columns=deals_df[0])
-    
-    # 2. Consultar campos personalizados
-    deals_uf = consultar_bitrix("crm_deal_uf")
-    if not deals_uf:
-        return None, None
-    
-    deals_uf_df = pd.DataFrame(deals_uf[1:], columns=deals_uf[0])
-    
+    deals_df, deals_uf_df = bitrix.get_deals_category_32()
+    if deals_df is None:
+        st.error("Erro ao buscar dados do Bitrix24")
     return deals_df, deals_uf_df
 
 # Sidebar para seleção de relatórios
