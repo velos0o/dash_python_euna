@@ -99,67 +99,8 @@
                     st.markdown("---")
                     st.markdown(f"<h3 style='color: {COLORS['azul']}'>Detalhamento por Família</h3>", unsafe_allow_html=True)
                     
-                    # Debug - mostrar colunas disponíveis
-                    st.write("Colunas disponíveis:", list(df_report.columns))
-                    
-                    # Preparar dados para exibição
-                    colunas_exibir = ['TITLE']
-                    if 'continua' in df_report.columns:
-                        colunas_exibir.append('continua')
-                    if 'cancelou' in df_report.columns:
-                        colunas_exibir.append('cancelou')
-                    if 'total_membros' in df_report.columns:
-                        colunas_exibir.append('total_membros')
-                    
-                    df_display = df_report[colunas_exibir].copy()
-                    
-                    # Debug - mostrar dados antes da conversão
-                    st.write("Primeiras linhas dos dados:", df_display.head())
-                    
-                    df_display.columns = ['Família', 'Continua', 'Cancelou', 'Total Membros']
-                    
-                    # Adicionar status
-                    df_display['Status'] = 'Pendente'
-                    df_display.loc[df_display['Continua'] > 0, 'Status'] = 'Continua'
-                    df_display.loc[df_display['Cancelou'] > 0, 'Status'] = 'Cancelou'
-                    
-                    # Ordenar por status e nome
-                    df_display = df_display.sort_values(['Status', 'Família'])
-                    
-                    # Adicionar botão de download
-                    csv = df_display.to_csv(index=False)
-                    st.download_button(
-                        "📥 Download Relatório",
-                        csv,
-                        "status_familias.csv",
-                        "text/csv",
-                        key='download-csv'
-                    )
-                    
-                    # Mostrar tabela
+                    # Mostrar tabela original
                     st.dataframe(
-                        df_display,
-                        use_container_width=True,
-                        column_config={
-                            'Família': st.column_config.TextColumn(
-                                'Família',
-                                width='large'
-                            ),
-                            'Continua': st.column_config.NumberColumn(
-                                'Continua',
-                                help='Número de membros que continuam'
-                            ),
-                            'Cancelou': st.column_config.NumberColumn(
-                                'Cancelou',
-                                help='Número de membros que cancelaram'
-                            ),
-                            'Total Membros': st.column_config.NumberColumn(
-                                'Total Membros',
-                                help='Total de membros da família'
-                            ),
-                            'Status': st.column_config.TextColumn(
-                                'Status',
-                                help='Status da família'
-                            )
-                        }
+                        df_report,
+                        use_container_width=True
                     )
