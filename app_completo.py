@@ -57,14 +57,18 @@ def get_mysql_data():
 
 # Função para consultar Bitrix24
 def consultar_bitrix(table, filtros=None):
-    url = f"{st.secrets["bitrix24_base_url"]}?token={st.secrets["bitrix24_token"]}&table={table}"
-    if filtros:
-        response = requests.post(url, json=filtros)
-    else:
-        response = requests.get(url)
-    if response.status_code == 200:
-        return response.json()
-    return None
+    try:
+        url = f"{st.secrets["bitrix24_base_url"]}?token={st.secrets["bitrix24_token"]}&table={table}"
+        if filtros:
+            response = requests.post(url, json=filtros)
+        else:
+            response = requests.get(url)
+        if response.status_code == 200:
+            return response.json()
+        return None
+    except Exception as e:
+        st.error(f"Erro ao consultar Bitrix24: {e}")
+        return None
 
 # Carregar dados do MySQL
 df_mysql = get_mysql_data()
