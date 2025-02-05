@@ -88,20 +88,33 @@ def get_mysql_data():
             query = """
             WITH dados_completos AS (
                 SELECT 
-                    f.idfamilia,
-                    f.nome_completo,
-                    f.telefone,
-                    f.email,
-                    f.is_menor,
-                    f.birthdate,
-                    f.paymentOption,
-                    TIMESTAMPDIFF(YEAR, f.birthdate, CURDATE()) as idade,
-                    COUNT(DISTINCT m.unique_id) as total_membros
-                FROM euna_familias f
-                LEFT JOIN familias m ON f.idfamilia = m.unique_id
+                    ef.idfamilia,
+                    ef.nome_completo,
+                    ef.telefone,
+                    ef.`e-mail` as email,
+                    ef.is_menor,
+                    ef.birthdate,
+                    ef.paymentOption,
+                    ef.isSpecial,
+                    ef.hasTechnicalProblems,
+                    ef.aire,
+                    TIMESTAMPDIFF(YEAR, ef.birthdate, CURDATE()) as idade,
+                    f.nome_familia,
+                    f.cpf,
+                    f.rg,
+                    f.passaporte,
+                    f.whatsapp,
+                    f.is_requerente_principal,
+                    f.is_italiano,
+                    COUNT(DISTINCT f.id) as total_membros
+                FROM euna_familias ef
+                LEFT JOIN familiares f ON ef.idfamilia = f.unique_id
                 GROUP BY 
-                    f.idfamilia, f.nome_completo, f.telefone, f.email,
-                    f.is_menor, f.birthdate, f.paymentOption
+                    ef.idfamilia, ef.nome_completo, ef.telefone, ef.`e-mail`,
+                    ef.is_menor, ef.birthdate, ef.paymentOption, ef.isSpecial,
+                    ef.hasTechnicalProblems, ef.aire,
+                    f.nome_familia, f.cpf, f.rg, f.passaporte, f.whatsapp,
+                    f.is_requerente_principal, f.is_italiano
             )
             SELECT 
                 idfamilia,
@@ -109,11 +122,37 @@ def get_mysql_data():
                     CASE 
                         WHEN paymentOption IS NULL OR paymentOption = '' 
                         THEN CONCAT_WS(' | ',
-                            nome_completo,
-                            telefone,
-                            email,
+                            COALESCE(nome_familia, nome_completo),
+                            CONCAT('CPF: ', COALESCE(cpf, 'Não informado')),
+                            CONCAT('RG: ', COALESCE(rg, 'Não informado')),
+                            CONCAT('Passaporte: ', COALESCE(passaporte, 'Não informado')),
+                            CONCAT('WhatsApp: ', COALESCE(whatsapp, telefone, 'Não informado')),
+                            CONCAT('Email: ', COALESCE(email, 'Não informado')),
                             CONCAT('Idade: ', idade),
-                            CASE WHEN is_menor = 1 THEN 'Menor de idade' ELSE 'Maior de idade' END
+                            CASE 
+                                WHEN is_menor = 1 THEN 'Menor de idade'
+                                ELSE 'Maior de idade'
+                            END,
+                            CASE 
+                                WHEN is_requerente_principal = 1 THEN 'Requerente Principal'
+                                ELSE 'Dependente'
+                            END,
+                            CASE 
+                                WHEN is_italiano = 1 THEN 'Italiano'
+                                ELSE 'Não Italiano'
+                            END,
+                            CASE 
+                                WHEN isSpecial = 1 THEN 'Caso Especial'
+                                ELSE ''
+                            END,
+                            CASE 
+                                WHEN hasTechnicalProblems = 1 THEN 'Problemas Técnicos'
+                                ELSE ''
+                            END,
+                            CASE 
+                                WHEN aire = 1 THEN 'AIRE'
+                                ELSE ''
+                            END
                         )
                     END
                     SEPARATOR '\n'
