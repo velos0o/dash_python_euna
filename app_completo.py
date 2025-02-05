@@ -5,6 +5,7 @@ import plotly.graph_objects as go
 import requests
 import mysql.connector
 from datetime import datetime, timedelta
+from queries import get_family_status_query, get_payment_options_query
 
 # Cores personalizadas
 COLORS = {
@@ -45,15 +46,32 @@ st.markdown(
     unsafe_allow_html=True
 )
 
-# Cabeçalho
+# Cabeçalho com bandeira italiana
 st.markdown(
     f"""
-    <h1 style='color: {COLORS['azul']}'>
-        Sistema de Relatórios - Eu na Europa
-    </h1>
-    <p style='color: {COLORS['azul']}; font-size: 1.2em;'>
-        Análise de Famílias e Requerentes
-    </p>
+    <div style="display: flex; align-items: center; margin-bottom: 1rem;">
+        <div style="
+            width: 60px;
+            height: 40px;
+            margin-right: 20px;
+            display: flex;
+            overflow: hidden;
+            border-radius: 4px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        ">
+            <div style="flex: 1; background-color: {COLORS['verde']};"></div>
+            <div style="flex: 1; background-color: {COLORS['branco']};"></div>
+            <div style="flex: 1; background-color: {COLORS['vermelho']};"></div>
+        </div>
+        <div>
+            <h1 style='color: {COLORS['azul']}; margin: 0;'>
+                Sistema de Relatórios - Eu na Europa
+            </h1>
+            <p style='color: {COLORS['azul']}; font-size: 1.2em; margin: 0;'>
+                Análise de Famílias e Requerentes
+            </p>
+        </div>
+    </div>
     """,
     unsafe_allow_html=True
 )
@@ -75,6 +93,7 @@ def consultar_bitrix(table, filtros=None):
         return response.json()
     return None
 
+@st.cache_data(ttl=300)  # Cache por 5 minutos
 def get_mysql_data():
     """Busca dados do MySQL com análise de opções de pagamento"""
     try:
@@ -85,91 +104,47 @@ def get_mysql_data():
             user=st.secrets["mysql_user"],
             password=st.secrets["mysql_password"]
         ) as conn:
-            query = """
-            WITH dados_completos AS (
-                SELECT 
-                    ef.idfamilia,
-                    ef.nome_completo,
-                    ef.telefone,
-                    ef.`e-mail` as email,
-                    ef.is_menor,
-                    ef.birthdate,
-                    ef.paymentOption,
-                    ef.isSpecial,
-                    ef.hasTechnicalProblems,
-                    ef.aire,
-                    TIMESTAMPDIFF(YEAR, ef.birthdate, CURDATE()) as idade,
-                    f.nome_familia,
-                    f.cpf,
-                    f.rg,
-                    f.passaporte,
-                    f.whatsapp,
-                    f.is_requerente_principal,
-                    f.is_italiano,
-                    COUNT(DISTINCT f.id) as total_membros
-                FROM euna_familias ef
-                LEFT JOIN familiares f ON ef.idfamilia = f.unique_id
-                GROUP BY 
-                    ef.idfamilia, ef.nome_completo, ef.telefone, ef.`e-mail`,
-                    ef.is_menor, ef.birthdate, ef.paymentOption, ef.isSpecial,
-                    ef.hasTechnicalProblems, ef.aire,
-                    f.nome_familia, f.cpf, f.rg, f.passaporte, f.whatsapp,
-                    f.is_requerente_principal, f.is_italiano
-            )
-            SELECT 
-                idfamilia,
-                GROUP_CONCAT(
-                    CASE 
-                        WHEN paymentOption IS NULL OR paymentOption = '' 
-                        THEN CONCAT_WS(' | ',
-                            COALESCE(nome_familia, nome_completo),
-                            CONCAT('CPF: ', COALESCE(cpf, 'Não informado')),
-                            CONCAT('RG: ', COALESCE(rg, 'Não informado')),
-                            CONCAT('Passaporte: ', COALESCE(passaporte, 'Não informado')),
-                            CONCAT('WhatsApp: ', COALESCE(whatsapp, telefone, 'Não informado')),
-                            CONCAT('Email: ', COALESCE(email, 'Não informado')),
-                            CONCAT('Idade: ', idade),
-                            CASE 
-                                WHEN is_menor = 1 THEN 'Menor de idade'
-                                ELSE 'Maior de idade'
-                            END,
-                            CASE 
-                                WHEN is_requerente_principal = 1 THEN 'Requerente Principal'
-                                ELSE 'Dependente'
-                            END,
-                            CASE 
-                                WHEN is_italiano = 1 THEN 'Italiano'
-                                ELSE 'Não Italiano'
-                            END,
-                            CASE 
-                                WHEN isSpecial = 1 THEN 'Caso Especial'
-                                ELSE ''
-                            END,
-                            CASE 
-                                WHEN hasTechnicalProblems = 1 THEN 'Problemas Técnicos'
-                                ELSE ''
-                            END,
-                            CASE 
-                                WHEN aire = 1 THEN 'AIRE'
-                                ELSE ''
-                            END
-                        )
-                    END
-                    SEPARATOR '\n'
-                ) as pessoas_sem_opcao,
-                SUM(CASE WHEN paymentOption IN ('A', 'B', 'C', 'D') THEN 1 ELSE 0 END) as continua,
-                SUM(CASE WHEN paymentOption = 'E' THEN 1 ELSE 0 END) as cancelou,
-                MAX(total_membros) as total_membros
-            FROM dados_completos
-            GROUP BY idfamilia
-            """
+            # Buscar status das famílias
+            df = pd.read_sql(get_family_status_query(), conn)
             
-            df = pd.read_sql(query, conn)
-            return df
+            # Buscar distribuição das opções de pagamento
+            df_options = pd.read_sql(get_payment_options_query(), conn)
+            
+            return df, df_options
             
     except Exception as e:
         st.error(f"Erro ao conectar ao MySQL: {e}")
-        return None
+        return None, None
+
+@st.cache_data(ttl=300)  # Cache por 5 minutos
+def get_bitrix_data():
+    """Busca dados do Bitrix24"""
+    # 1. Consultar deals da categoria 32
+    filtros_deal = {
+        "dimensionsFilters": [[
+            {
+                "fieldName": "CATEGORY_ID",
+                "values": [32],
+                "type": "INCLUDE",
+                "operator": "EQUALS"
+            }
+        ]]
+    }
+    
+    deals_df = consultar_bitrix("crm_deal", filtros_deal)
+    if not deals_df:
+        return None, None
+    
+    deals_df = pd.DataFrame(deals_df[1:], columns=deals_df[0])
+    
+    # 2. Consultar campos personalizados
+    deals_uf = consultar_bitrix("crm_deal_uf")
+    if not deals_uf:
+        return None, None
+    
+    deals_uf_df = pd.DataFrame(deals_uf[1:], columns=deals_uf[0])
+    
+    return deals_df, deals_uf_df
 
 # Sidebar para seleção de relatórios
 relatorio_selecionado = st.sidebar.selectbox(
@@ -182,92 +157,70 @@ if relatorio_selecionado == "Funil de Famílias":
     
     # Criar relatório do funil
     with st.spinner("Analisando dados..."):
-        # 1. Consultar deals da categoria 32
-        filtros_deal = {
-            "dimensionsFilters": [[
-                {
-                    "fieldName": "CATEGORY_ID",
-                    "values": [32],
-                    "type": "INCLUDE",
-                    "operator": "EQUALS"
-                }
-            ]]
-        }
+        deals_df, deals_uf_df = get_bitrix_data()
         
-        deals_df = consultar_bitrix("crm_deal", filtros_deal)
-        if deals_df:
-            deals_df = pd.DataFrame(deals_df[1:], columns=deals_df[0])
+        if deals_df is not None and deals_uf_df is not None:
             total_categoria_32 = len(deals_df)
             
-            # 2. Consultar campos personalizados
-            deals_uf = consultar_bitrix("crm_deal_uf")
-            if deals_uf:
-                deals_uf_df = pd.DataFrame(deals_uf[1:], columns=deals_uf[0])
-                
-                # Filtrar registros com ID de família
-                deals_com_id = deals_uf_df[
-                    deals_uf_df['UF_CRM_1722605592778'].notna() & 
-                    (deals_uf_df['UF_CRM_1722605592778'].astype(str) != '')
-                ]
-                total_com_id = len(deals_com_id)
-                
-                # Métricas em cards
-                col1, col2 = st.columns(2)
-                
-                with col1:
-                    st.metric(
-                        "Total Categoria 32",
-                        f"{total_categoria_32:,}".replace(",", "."),
-                        help="Total de deals na categoria 32",
-                        delta_color="normal"
-                    )
-                
-                with col2:
-                    st.metric(
-                        "Com ID de Família",
-                        f"{total_com_id:,}".replace(",", "."),
-                        f"{(total_com_id/total_categoria_32*100):.1f}%",
-                        help="Deals com ID de família preenchido",
-                        delta_color="normal"
-                    )
-                
-                # Gráfico de funil
-                dados_funil = {
-                    'Etapa': ['Total Categoria 32', 'Com ID de Família'],
-                    'Quantidade': [total_categoria_32, total_com_id]
-                }
-                
-                fig_funil = px.funnel(
-                    dados_funil,
-                    x='Quantidade',
-                    y='Etapa',
-                    title='Funil de Conversão'
+            # Filtrar registros com ID de família
+            deals_com_id = deals_uf_df[
+                deals_uf_df['UF_CRM_1722605592778'].notna() & 
+                (deals_uf_df['UF_CRM_1722605592778'].astype(str) != '')
+            ]
+            total_com_id = len(deals_com_id)
+            
+            # Métricas em cards
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                st.metric(
+                    "Total Categoria 32",
+                    f"{total_categoria_32:,}".replace(",", "."),
+                    help="Total de deals na categoria 32",
+                    delta_color="normal"
                 )
-                
-                fig_funil.update_traces(
-                    textinfo='value+percent initial',
-                    hovertemplate="<b>%{y}</b><br>Quantidade: %{x}<br>Percentual: %{percentInitial:.1%}",
-                    marker_color=[COLORS['azul'], COLORS['verde']]
+            
+            with col2:
+                st.metric(
+                    "Com ID de Família",
+                    f"{total_com_id:,}".replace(",", "."),
+                    f"{(total_com_id/total_categoria_32*100):.1f}%",
+                    help="Deals com ID de família preenchido",
+                    delta_color="normal"
                 )
-                
-                st.plotly_chart(fig_funil, use_container_width=True)
+            
+            # Gráfico de funil
+            dados_funil = {
+                'Etapa': ['Total Categoria 32', 'Com ID de Família'],
+                'Quantidade': [total_categoria_32, total_com_id]
+            }
+            
+            fig_funil = px.funnel(
+                dados_funil,
+                x='Quantidade',
+                y='Etapa',
+                title='Funil de Conversão'
+            )
+            
+            fig_funil.update_traces(
+                textinfo='value+percent initial',
+                hovertemplate="<b>%{y}</b><br>Quantidade: %{x}<br>Percentual: %{percentInitial:.1%}",
+                marker_color=[COLORS['azul'], COLORS['verde']]
+            )
+            
+            st.plotly_chart(fig_funil, use_container_width=True)
 
 elif relatorio_selecionado == "Status das Famílias":
     st.markdown(f"<h1 style='color: {COLORS['azul']}'>Status das Famílias</h1>", unsafe_allow_html=True)
     
     # Carregar dados
-    df_mysql = get_mysql_data()
+    df_mysql, df_options = get_mysql_data()
     
     if df_mysql is not None:
         # Buscar nomes das famílias no Bitrix24
-        deals_data = consultar_bitrix("crm_deal")
-        deals_uf = consultar_bitrix("crm_deal_uf")
+        deals_df, deals_uf_df = get_bitrix_data()
         
-        if deals_data and deals_uf:
-            # Converter para DataFrames
-            deals_df = pd.DataFrame(deals_data[1:], columns=deals_data[0])
-            deals_uf_df = pd.DataFrame(deals_uf[1:], columns=deals_uf[0])
-            
+        if deals_df is not None and deals_uf_df is not None:
             # Juntar os dados
             df_bitrix = pd.merge(
                 deals_df[['ID', 'TITLE']],
@@ -333,6 +286,28 @@ elif relatorio_selecionado == "Status das Famílias":
                     hovertemplate="<b>%{label}</b><br>Quantidade: %{value}<br>Percentual: %{percent}"
                 )
                 st.plotly_chart(fig_pie, use_container_width=True)
+            
+            with col2:
+                # Gráfico de Pizza - Opções de Pagamento
+                if df_options is not None:
+                    fig_options = px.pie(
+                        df_options,
+                        values='total',
+                        names='paymentOption',
+                        title='Distribuição por Opção de Pagamento',
+                        color_discrete_sequence=[
+                            COLORS['verde'],
+                            '#2ECC71',
+                            '#3498DB',
+                            '#9B59B6',
+                            COLORS['vermelho']
+                        ]
+                    )
+                    fig_options.update_traces(
+                        textinfo='percent+value+label',
+                        hovertemplate="<b>Opção %{label}</b><br>Quantidade: %{value}<br>Percentual: %{percent}"
+                    )
+                    st.plotly_chart(fig_options, use_container_width=True)
             
             # Pessoas sem opção de pagamento
             st.subheader("Pessoas sem Opção de Pagamento")
