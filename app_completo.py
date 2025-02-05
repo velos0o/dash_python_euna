@@ -335,16 +335,16 @@ elif relatorio_selecionado == "Status das Famílias":
             
             # Tabela de Famílias
             st.subheader("Detalhes das Famílias")
-            df_detalhes = df_report[[
-                'TITLE', 'continua', 'cancelou', 'total_atual',
-                'total_requerentes_esperado'
-            ]].copy()
+            # Preparar dados para exibição
+            df_detalhes = pd.DataFrame({
+                'Família': df_report['TITLE'],
+                'Continuam': df_report['continua'],
+                'Cancelaram': df_report['cancelou'],
+                'Total Atual': df_report['total_atual'],
+                'Total Esperado': df_report['total_requerentes_esperado']
+            })
             
-            df_detalhes.columns = [
-                'Família', 'Continuam', 'Cancelaram',
-                'Total Atual', 'Total Esperado'
-            ]
-            
+            # Calcular diferença
             df_detalhes['Diferença'] = df_detalhes['Total Esperado'] - df_detalhes['Total Atual']
             
             # Adicionar botão de download

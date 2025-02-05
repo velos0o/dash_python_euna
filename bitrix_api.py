@@ -63,7 +63,8 @@ class Bitrix24API:
                 }]],
                 "fields": [
                     {"name": "DEAL_ID"},
-                    {"name": "UF_CRM_1722605592778"}
+                    {"name": "UF_CRM_1722605592778"},
+                    {"name": "UF_CRM_1738699062493"}
                 ]
             }
             
