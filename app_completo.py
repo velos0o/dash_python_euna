@@ -14,8 +14,8 @@ st.set_page_config(
 )
 
 # Configurações do Bitrix24 (usando secrets)
-BITRIX_BASE_URL = st.secrets["bitrix24"]["base_url"]
-BITRIX_TOKEN = st.secrets["bitrix24"]["token"]
+BITRIX_BASE_URL = st.secrets["bitrix24_base_url"]
+BITRIX_TOKEN = st.secrets["bitrix24_token"]
 
 def consultar_bitrix(table, filtros=None):
     """Função para consultar a API do Bitrix24"""
@@ -34,11 +34,11 @@ def get_mysql_data():
     """Busca dados do MySQL"""
     try:
         conn = mysql.connector.connect(
-            host=st.secrets["mysql"]["host"],
-            port=st.secrets["mysql"]["port"],
-            database=st.secrets["mysql"]["database"],
-            user=st.secrets["mysql"]["user"],
-            password=st.secrets["mysql"]["password"]
+            host=st.secrets["mysql_host"],
+            port=st.secrets["mysql_port"],
+            database=st.secrets["mysql_database"],
+            user=st.secrets["mysql_user"],
+            password=st.secrets["mysql_password"]
         )
         
         query = """
