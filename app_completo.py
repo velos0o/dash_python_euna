@@ -19,7 +19,7 @@ COLORS = {
 st.set_page_config(
     page_title="Sistema de Relatórios",
     page_icon="📊",
-    layout="wide"
+    layout="wide",
     page_title='Eu na Europa - Sistema de Relatórios',
     page_icon='📊',
     layout='wide'
