@@ -1,3 +1,4 @@
+@@ -1,132 +1,143 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
@@ -35,7 +36,9 @@ st.title("Status das Famílias")
 def get_mysql_data():
     try:
         conn = mysql.connector.connect(
-@@ -39,94 +24,120 @@
+            host=st.secrets["mysql_host"],
+            port=st.secrets["mysql_port"],
+            database=st.secrets["mysql_database"],
             user=st.secrets["mysql_user"],
             password=st.secrets["mysql_password"]
         )
