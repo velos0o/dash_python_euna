@@ -287,35 +287,86 @@ elif relatorio_selecionado == "Status das Famílias":
             
             df_report['TITLE'] = df_report['TITLE'].fillna(df_report['idfamilia'])
             
-            # Métricas principais
+            # Métricas detalhadas
+            st.subheader("Métricas por Opção de Pagamento")
+            
+            # Primeira linha - Total e Opções A e B
             col1, col2, col3 = st.columns(3)
             
             with col1:
+                total_geral = int(df_report['total_atual'].sum())
                 st.metric(
-                    "Total de Famílias",
-                    f"{len(df_report):,}".replace(",", "."),
-                    delta_color="normal"
+                    "Total de Requerentes",
+                    f"{total_geral:,}".replace(",", "."),
+                    help="Total de requerentes em todas as opções"
                 )
             
             with col2:
-                total_ativos = int(df_report['continua'].sum())
-                total_geral = int(df_report['total_atual'].sum())
-                
+                total_a = int(df_report['A'].sum())
                 st.metric(
-                    "Famílias Ativas",
-                    f"{total_ativos:,}".replace(",", "."),
-                    f"{(total_ativos / total_geral * 100):.0f}%" if total_geral > 0 else "0%",
-                    delta_color="normal"
+                    "Opção A",
+                    f"{total_a:,}".replace(",", "."),
+                    f"{(total_a / total_geral * 100):.0f}%" if total_geral > 0 else "0%",
+                    help="Total de requerentes na opção A"
                 )
             
             with col3:
-                total_cancelados = int(df_report['cancelou'].sum())
-                
+                total_b = int(df_report['B'].sum())
                 st.metric(
-                    "Famílias Canceladas",
-                    f"{total_cancelados:,}".replace(",", "."),
-                    f"{(total_cancelados / total_geral * 100):.0f}%" if total_geral > 0 else "0%",
-                    delta_color="normal"
+                    "Opção B",
+                    f"{total_b:,}".replace(",", "."),
+                    f"{(total_b / total_geral * 100):.0f}%" if total_geral > 0 else "0%",
+                    help="Total de requerentes na opção B"
+                )
+            
+            # Segunda linha - Opções C, D e E
+            col1, col2, col3 = st.columns(3)
+            
+            with col1:
+                total_c = int(df_report['C'].sum())
+                st.metric(
+                    "Opção C",
+                    f"{total_c:,}".replace(",", "."),
+                    f"{(total_c / total_geral * 100):.0f}%" if total_geral > 0 else "0%",
+                    help="Total de requerentes na opção C"
+                )
+            
+            with col2:
+                total_d = int(df_report['D'].sum())
+                st.metric(
+                    "Opção D",
+                    f"{total_d:,}".replace(",", "."),
+                    f"{(total_d / total_geral * 100):.0f}%" if total_geral > 0 else "0%",
+                    help="Total de requerentes na opção D"
+                )
+            
+            with col3:
+                total_e = int(df_report['E'].sum())
+                st.metric(
+                    "Cancelados (E)",
+                    f"{total_e:,}".replace(",", "."),
+                    f"{(total_e / total_geral * 100):.0f}%" if total_geral > 0 else "0%",
+                    help="Total de requerentes que cancelaram"
+                )
+            
+            # Terceira linha - Totais agrupados
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                total_ativos = total_a + total_b + total_c + total_d
+                st.metric(
+                    "Total Ativos (A+B+C+D)",
+                    f"{total_ativos:,}".replace(",", "."),
+                    f"{(total_ativos / total_geral * 100):.0f}%" if total_geral > 0 else "0%",
+                    help="Total de requerentes ativos em todas as opções"
+                )
+            
+            with col2:
+                st.metric(
+                    "Total Cancelados (E)",
+                    f"{total_e:,}".replace(",", "."),
+                    f"{(total_e / total_geral * 100):.0f}%" if total_geral > 0 else "0%",
+                    help="Total de requerentes que cancelaram"
                 )
             
             # Gráficos
