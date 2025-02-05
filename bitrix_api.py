@@ -37,6 +37,7 @@ class Bitrix24API:
                 {"name": "ID"},
                 {"name": "TITLE"},
                 {"name": "STAGE_ID"},
+                {"name": "STAGE_NAME"},
                 {"name": "CATEGORY_ID"}
             ]
         }

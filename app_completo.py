@@ -167,31 +167,52 @@ if relatorio_selecionado == "Funil de Famílias":
                     delta_color="normal"
                 )
             
-            # Gráfico de funil
-            dados_funil = {
-                'Etapa': [
+            # Gráfico de funil melhorado
+            fig_funil = go.Figure()
+            
+            # Adicionar etapas do funil
+            fig_funil.add_trace(go.Funnel(
+                name='Funil de Conversão',
+                y=[
                     'Total em NEGOCIAÇÃO TAXA',
                     'Com Conteúdo',
                     'Em NEGOCIAÇÃO TAXA'
                 ],
-                'Quantidade': [
+                x=[
                     total_categoria_32,
                     total_com_conteudo,
                     total_na_etapa
-                ]
-            }
+                ],
+                textposition="inside",
+                textinfo="value+percent previous",
+                opacity=0.85,
+                marker={
+                    "color": [COLORS['azul'], COLORS['verde'], COLORS['vermelho']],
+                    "line": {"width": [2, 2, 2], "color": [COLORS['branco']]}
+                },
+                connector={
+                    "line": {
+                        "color": "black",
+                        "width": 1
+                    }
+                }
+            ))
             
-            fig_funil = px.funnel(
-                dados_funil,
-                x='Quantidade',
-                y='Etapa',
-                title='Funil de Conversão'
-            )
-            
-            fig_funil.update_traces(
-                textinfo='value+percent initial',
-                hovertemplate="<b>%{y}</b><br>Quantidade: %{x}<br>Percentual: %{percentInitial:.1%}",
-                marker_color=[COLORS['azul'], COLORS['verde'], COLORS['vermelho']]
+            # Atualizar layout
+            fig_funil.update_layout(
+                title={
+                    'text': 'Funil de Conversão - NEGOCIAÇÃO TAXA',
+                    'y': 0.95,
+                    'x': 0.5,
+                    'xanchor': 'center',
+                    'yanchor': 'top',
+                    'font': {'size': 20, 'color': COLORS['azul']}
+                },
+                font={'size': 14},
+                showlegend=False,
+                margin=dict(t=120, l=50, r=50),
+                paper_bgcolor='rgba(0,0,0,0)',
+                plot_bgcolor='rgba(0,0,0,0)'
             )
             
             st.plotly_chart(fig_funil, use_container_width=True)
@@ -278,16 +299,16 @@ elif relatorio_selecionado == "Status das Famílias":
             with col2:
                 st.metric(
                     "Famílias Ativas",
-                    f"{df_report['continua'].sum():,}".replace(",", "."),
-                    f"{(df_report['continua'].sum() / len(df_report) * 100):.1f}%",
+                    f"{int(df_report['continua'].sum()):,}".replace(",", "."),
+                    f"{(df_report['continua'].sum() / len(df_report) * 100):.0f}%",
                     delta_color="normal"
                 )
             
             with col3:
                 st.metric(
                     "Famílias Canceladas",
-                    f"{df_report['cancelou'].sum():,}".replace(",", "."),
-                    f"{(df_report['cancelou'].sum() / len(df_report) * 100):.1f}%",
+                    f"{int(df_report['cancelou'].sum()):,}".replace(",", "."),
+                    f"{(df_report['cancelou'].sum() / len(df_report) * 100):.0f}%",
                     delta_color="normal"
                 )
             
@@ -357,11 +378,15 @@ elif relatorio_selecionado == "Status das Famílias":
                 key='download-csv'
             )
             
+            # Ordenar por diferença
+            df_detalhes = df_detalhes.sort_values('Diferença', ascending=False)
+            
+            # Formatar números como inteiros
+            for col in ['Continuam', 'Cancelaram', 'Total Atual', 'Total Esperado', 'Diferença']:
+                df_detalhes[col] = df_detalhes[col].astype(int)
+            
             st.dataframe(
-                df_detalhes.style.background_gradient(
-                    subset=['Diferença'],
-                    cmap='RdYlGn_r'
-                ),
+                df_detalhes,
                 use_container_width=True
             )
             
