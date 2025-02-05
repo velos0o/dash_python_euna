@@ -72,7 +72,7 @@ def get_mysql_data():
             conn.close()
 
 def criar_relatorio_funil():
-    """Criar relatório do funil de famílias focando no ID de família"""
+    """Criar relatório do funil de famílias com análise detalhada"""
     with st.spinner("Analisando dados do Bitrix24..."):
         # 1. Consultar deals da categoria 32
         filtros_deal = {
@@ -92,65 +92,132 @@ def criar_relatorio_funil():
             ]
         }
         
-        deals_df = consultar_bitrix("crm_deal", filtros_deal)
-        
-        if deals_df is None:
+        # Consultar deals
+        response_deals = consultar_bitrix("crm_deal", filtros_deal)
+        if response_deals is None:
             st.error("❌ Não foi possível obter os dados de deals")
             return None
             
         # Converter para DataFrame
-        deals_df = pd.DataFrame(deals_df[1:], columns=deals_df[0])
+        deals_df = pd.DataFrame(response_deals[1:], columns=response_deals[0])
         total_categoria_32 = len(deals_df)
         
-        # 2. Consultar campos personalizados (UF_CRM_1722605592778)
-        deals_uf = consultar_bitrix("crm_deal_uf")
-        if deals_uf is None:
+        # 2. Consultar campos personalizados
+        response_uf = consultar_bitrix("crm_deal_uf")
+        if response_uf is None:
             st.error("❌ Não foi possível obter os dados complementares")
             return None
             
-        deals_uf_df = pd.DataFrame(deals_uf[1:], columns=deals_uf[0])
+        deals_uf_df = pd.DataFrame(response_uf[1:], columns=response_uf[0])
         
-        # Filtrar apenas registros com UF_CRM_1722605592778 preenchido
+        # Filtrar registros com conteúdo em UF_CRM_1738699062493
         deals_uf_df = deals_uf_df[
-            deals_uf_df['UF_CRM_1722605592778'].notna() & 
-            (deals_uf_df['UF_CRM_1722605592778'].astype(str) != '')
+            deals_uf_df['UF_CRM_1738699062493'].notna() & 
+            (deals_uf_df['UF_CRM_1738699062493'].astype(str) != '')
         ]
         
-        # Juntar os dados
+        # Consultar dados do MySQL para análise de familiares
+        try:
+            with mysql.connector.connect(
+                host=st.secrets["mysql_host"],
+                port=st.secrets["mysql_port"],
+                database=st.secrets["mysql_database"],
+                user=st.secrets["mysql_user"],
+                password=st.secrets["mysql_password"]
+            ) as conn:
+                # Query para análise de familiares
+                query = """
+                SELECT 
+                    f.idfamilia,
+                    COUNT(CASE 
+                        WHEN f.paymentOption != 'E' AND (
+                            f.is_menor = 0 OR 
+                            (TIMESTAMPDIFF(YEAR, f.birthdate, CURDATE()) >= 12)
+                        ) THEN 1 
+                        END
+                    ) as total_ativos,
+                    COUNT(CASE 
+                        WHEN f.paymentOption = 'E' THEN 1 
+                        END
+                    ) as total_cancelados
+                FROM euna_familias f
+                GROUP BY f.idfamilia
+                """
+                df_familias = pd.read_sql(query, conn)
+        except Exception as e:
+            st.error(f"Erro ao consultar banco de dados: {e}")
+            return None
+        
+        # Juntar dados do Bitrix24 com MySQL
         df_completo = pd.merge(
             deals_df,
-            deals_uf_df[['DEAL_ID', 'UF_CRM_1722605592778']],
+            deals_uf_df[['DEAL_ID', 'UF_CRM_1722605592778', 'UF_CRM_1738699062493']],
             left_on='ID',
             right_on='DEAL_ID',
             how='left'
         )
         
+        # Juntar com dados das famílias
+        df_completo = pd.merge(
+            df_completo,
+            df_familias,
+            left_on='UF_CRM_1722605592778',
+            right_on='idfamilia',
+            how='left'
+        )
+        
         # Calcular métricas
         total_deals = len(deals_df)
-        total_com_id = len(df_completo[df_completo['UF_CRM_1722605592778'].notna()])
+        total_com_conteudo = len(df_completo[df_completo['UF_CRM_1738699062493'].notna()])
+        total_ativos = df_completo['total_ativos'].sum()
+        total_cancelados = df_completo['total_cancelados'].sum()
         
         # Mostrar métricas em cards
-        col1, col2 = st.columns(2)
+        col1, col2, col3, col4 = st.columns(4)
         
         with col1:
             st.metric(
-                "Total na Categoria 32",
+                "Total Categoria 32",
                 f"{total_deals:,}".replace(",", "."),
                 help="Total de deals na categoria 32"
             )
         
         with col2:
             st.metric(
-                "Com ID de Família",
-                f"{total_com_id:,}".replace(",", "."),
-                f"{(total_com_id/total_deals*100):.1f}%",
-                help="Deals com ID de família preenchido (UF_CRM_1722605592778)"
+                "Com Conteúdo",
+                f"{total_com_conteudo:,}".replace(",", "."),
+                f"{(total_com_conteudo/total_deals*100):.1f}%",
+                help="Deals com conteúdo preenchido (UF_CRM_1738699062493)"
+            )
+        
+        with col3:
+            st.metric(
+                "Requerentes Ativos",
+                f"{total_ativos:,}".replace(",", "."),
+                help="Total de requerentes ativos (excluindo menores de 12 anos)"
+            )
+        
+        with col4:
+            st.metric(
+                "Requerentes Cancelados",
+                f"{total_cancelados:,}".replace(",", "."),
+                help="Total de requerentes cancelados"
             )
         
         # Criar gráfico de funil
         dados_funil = {
-            'Etapa': ['Total Categoria 32', 'Com ID de Família'],
-            'Quantidade': [total_deals, total_com_id]
+            'Etapa': [
+                'Total Categoria 32',
+                'Com Conteúdo',
+                'Requerentes Ativos',
+                'Requerentes Cancelados'
+            ],
+            'Quantidade': [
+                total_deals,
+                total_com_conteudo,
+                total_ativos,
+                total_cancelados
+            ]
         }
         
         fig_funil = px.funnel(
@@ -167,14 +234,33 @@ def criar_relatorio_funil():
         
         st.plotly_chart(fig_funil, use_container_width=True)
         
-        # Mostrar tabela com detalhes
-        if st.checkbox("Ver detalhes dos deals com ID de família"):
-            st.subheader("Deals com ID de Família")
-            df_detalhes = df_completo[
-                df_completo['UF_CRM_1722605592778'].notna()
-            ][['ID', 'TITLE', 'UF_CRM_1722605592778']].copy()
+        # Mostrar detalhes por família
+        if st.checkbox("Ver detalhes por família"):
+            st.subheader("Detalhes por Família")
             
-            df_detalhes.columns = ['ID do Deal', 'Título', 'ID da Família']
+            df_detalhes = df_completo[
+                df_completo['UF_CRM_1738699062493'].notna()
+            ][[
+                'ID', 'TITLE', 'UF_CRM_1722605592778',
+                'total_ativos', 'total_cancelados'
+            ]].copy()
+            
+            # Calcular total de requerentes
+            df_detalhes['total_requerentes'] = df_detalhes['total_ativos'] + df_detalhes['total_cancelados']
+            
+            # Renomear colunas
+            df_detalhes.columns = [
+                'ID do Deal',
+                'Nome da Família',
+                'ID da Família',
+                'Requerentes Ativos',
+                'Requerentes Cancelados',
+                'Total de Requerentes'
+            ]
+            
+            # Ordenar por total de requerentes
+            df_detalhes = df_detalhes.sort_values('Total de Requerentes', ascending=False)
+            
             st.dataframe(
                 df_detalhes,
                 hide_index=True,
