@@ -17,7 +17,7 @@ COLORS = {
 # Configuração da página
 st.set_page_config(
     page_title="Eu na Europa - Sistema de Relatórios",
-    page_icon="🇪🇺",
+    page_icon="📊",
     layout="wide"
 )
 
@@ -49,10 +49,10 @@ st.markdown(
 st.markdown(
     f"""
     <h1 style='color: {COLORS['azul']}'>
-        🇪🇺 Sistema de Relatórios - Eu na Europa
+        Sistema de Relatórios - Eu na Europa
     </h1>
     <p style='color: {COLORS['azul']}; font-size: 1.2em;'>
-        🇮🇹 Análise de Famílias e Requerentes
+        Análise de Famílias e Requerentes
     </p>
     """,
     unsafe_allow_html=True
@@ -91,7 +91,7 @@ def get_mysql_data():
                     f.idfamilia,
                     f.nome_completo,
                     f.telefone,
-                    f.e_mail as email,
+                    f.email,
                     f.is_menor,
                     f.birthdate,
                     f.paymentOption,
@@ -100,7 +100,7 @@ def get_mysql_data():
                 FROM euna_familias f
                 LEFT JOIN familias m ON f.idfamilia = m.unique_id
                 GROUP BY 
-                    f.idfamilia, f.nome_completo, f.telefone, f.e_mail,
+                    f.idfamilia, f.nome_completo, f.telefone, f.email,
                     f.is_menor, f.birthdate, f.paymentOption
             )
             SELECT 
@@ -116,7 +116,7 @@ def get_mysql_data():
                             CASE WHEN is_menor = 1 THEN 'Menor de idade' ELSE 'Maior de idade' END
                         )
                     END
-                    SEPARATOR '\\n'
+                    SEPARATOR '\n'
                 ) as pessoas_sem_opcao,
                 SUM(CASE WHEN paymentOption IN ('A', 'B', 'C', 'D') THEN 1 ELSE 0 END) as continua,
                 SUM(CASE WHEN paymentOption = 'E' THEN 1 ELSE 0 END) as cancelou,
@@ -214,7 +214,7 @@ if relatorio_selecionado == "Funil de Famílias":
                 st.plotly_chart(fig_funil, use_container_width=True)
 
 elif relatorio_selecionado == "Status das Famílias":
-    st.markdown(f"<h1 style='color: {COLORS['azul']}'>👨‍👩‍👧‍👦 Status das Famílias</h1>", unsafe_allow_html=True)
+    st.markdown(f"<h1 style='color: {COLORS['azul']}'>Status das Famílias</h1>", unsafe_allow_html=True)
     
     # Carregar dados
     df_mysql = get_mysql_data()
