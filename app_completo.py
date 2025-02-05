@@ -1,7 +1,7 @@
 import streamlit as st
-import mysql.connector
 import pandas as pd
 import plotly.express as px
+import mysql.connector
 import requests
 import json
 import time
@@ -29,8 +29,8 @@ st.title("📊 Sistema de Relatórios")
 BITRIX_BASE_URL = "https://eunaeuropacidadania.bitrix24.com.br/bitrix/tools/biconnector/pbi.php"
 BITRIX_TOKEN = "0z1rgUWgNbR0e53G7T88D9A1gkDWGly7br"
 
-# Função para buscar dados do MySQL
 def get_mysql_data():
+    """Função para buscar dados do MySQL"""
     try:
         conn = mysql.connector.connect(
             host=st.secrets["mysql_host"],
@@ -89,8 +89,8 @@ def get_mysql_data():
         if "conn" in locals():
             conn.close()
 
-# Função para consultar Bitrix24
 def consultar_bitrix(table, filtros=None, max_retries=3):
+    """Função para consultar Bitrix24"""
     try:
         url = f"{BITRIX_BASE_URL}?token={BITRIX_TOKEN}&table={table}"
         
