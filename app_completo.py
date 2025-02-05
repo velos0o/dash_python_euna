@@ -127,19 +127,23 @@ if relatorio_selecionado == "Funil de Famílias":
         if deals_df is not None and deals_uf_df is not None:
             total_categoria_32 = len(deals_df)
             
-            # Filtrar registros com ID de família
-            deals_com_id = deals_uf_df[
-                deals_uf_df['UF_CRM_1722605592778'].notna() & 
-                (deals_uf_df['UF_CRM_1722605592778'].astype(str) != '')
+            # Filtrar registros com conteúdo
+            deals_com_conteudo = deals_uf_df[
+                deals_uf_df['UF_CRM_1738699062493'].notna() & 
+                (deals_uf_df['UF_CRM_1738699062493'].astype(str) != '')
             ]
-            total_com_id = len(deals_com_id)
+            total_com_conteudo = len(deals_com_conteudo)
+            
+            # Filtrar por etapa
+            deals_na_etapa = deals_df[deals_df['STAGE_ID'] == 'C32:UC_GBPN8V']
+            total_na_etapa = len(deals_na_etapa)
             
             # Métricas em cards
-            col1, col2 = st.columns(2)
+            col1, col2, col3 = st.columns(3)
             
             with col1:
                 st.metric(
-                    "Total Categoria 32",
+                    "Total em NEGOCIAÇÃO TAXA",
                     f"{total_categoria_32:,}".replace(",", "."),
                     help="Total de deals na categoria 32",
                     delta_color="normal"
@@ -147,17 +151,34 @@ if relatorio_selecionado == "Funil de Famílias":
             
             with col2:
                 st.metric(
-                    "Com ID de Família",
-                    f"{total_com_id:,}".replace(",", "."),
-                    f"{(total_com_id/total_categoria_32*100):.1f}%",
-                    help="Deals com ID de família preenchido",
+                    "Com Conteúdo",
+                    f"{total_com_conteudo:,}".replace(",", "."),
+                    f"{(total_com_conteudo/total_categoria_32*100):.1f}%",
+                    help="Deals com conteúdo preenchido",
+                    delta_color="normal"
+                )
+            
+            with col3:
+                st.metric(
+                    "Em NEGOCIAÇÃO TAXA",
+                    f"{total_na_etapa:,}".replace(",", "."),
+                    f"{(total_na_etapa/total_com_conteudo*100):.1f}%",
+                    help="Deals na etapa C32:UC_GBPN8V",
                     delta_color="normal"
                 )
             
             # Gráfico de funil
             dados_funil = {
-                'Etapa': ['Total Categoria 32', 'Com ID de Família'],
-                'Quantidade': [total_categoria_32, total_com_id]
+                'Etapa': [
+                    'Total em NEGOCIAÇÃO TAXA',
+                    'Com Conteúdo',
+                    'Em NEGOCIAÇÃO TAXA'
+                ],
+                'Quantidade': [
+                    total_categoria_32,
+                    total_com_conteudo,
+                    total_na_etapa
+                ]
             }
             
             fig_funil = px.funnel(
@@ -170,10 +191,48 @@ if relatorio_selecionado == "Funil de Famílias":
             fig_funil.update_traces(
                 textinfo='value+percent initial',
                 hovertemplate="<b>%{y}</b><br>Quantidade: %{x}<br>Percentual: %{percentInitial:.1%}",
-                marker_color=[COLORS['azul'], COLORS['verde']]
+                marker_color=[COLORS['azul'], COLORS['verde'], COLORS['vermelho']]
             )
             
             st.plotly_chart(fig_funil, use_container_width=True)
+            
+            # Deals com conteúdo fora da etapa
+            st.subheader("Deals com Conteúdo Fora da Etapa NEGOCIAÇÃO TAXA")
+            
+            # Identificar deals com conteúdo que não estão na etapa
+            deals_fora_etapa = pd.merge(
+                deals_df[deals_df['STAGE_ID'] != 'C32:UC_GBPN8V'][['ID', 'TITLE', 'STAGE_ID', 'STAGE_NAME']],
+                deals_com_conteudo[['DEAL_ID']],
+                left_on='ID',
+                right_on='DEAL_ID',
+                how='inner'
+            )
+            
+            if not deals_fora_etapa.empty:
+                df_display = deals_fora_etapa[[
+                    'ID', 'TITLE', 'STAGE_NAME'
+                ]].copy()
+                
+                df_display.columns = [
+                    'ID do Deal',
+                    'Título',
+                    'Etapa Atual'
+                ]
+                
+                # Adicionar botão de download
+                csv = df_display.to_csv(index=False)
+                st.download_button(
+                    "📥 Download Lista",
+                    csv,
+                    "deals_fora_etapa.csv",
+                    "text/csv",
+                    key='download-deals'
+                )
+                
+                st.dataframe(
+                    df_display,
+                    use_container_width=True
+                )
 
 elif relatorio_selecionado == "Status das Famílias":
     st.markdown(f"<h1 style='color: {COLORS['azul']}'>Status das Famílias</h1>", unsafe_allow_html=True)
@@ -273,6 +332,62 @@ elif relatorio_selecionado == "Status das Famílias":
                         hovertemplate="<b>Opção %{label}</b><br>Quantidade: %{value}<br>Percentual: %{percent}"
                     )
                     st.plotly_chart(fig_options, use_container_width=True)
+            
+            # Tabela de Famílias
+            st.subheader("Detalhes das Famílias")
+            df_detalhes = df_report[[
+                'TITLE', 'continua', 'cancelou', 'total_atual',
+                'total_requerentes_esperado'
+            ]].copy()
+            
+            df_detalhes.columns = [
+                'Família', 'Continuam', 'Cancelaram',
+                'Total Atual', 'Total Esperado'
+            ]
+            
+            df_detalhes['Diferença'] = df_detalhes['Total Esperado'] - df_detalhes['Total Atual']
+            
+            # Adicionar botão de download
+            csv = df_detalhes.to_csv(index=False)
+            st.download_button(
+                "📥 Download Relatório",
+                csv,
+                "relatorio_familias.csv",
+                "text/csv",
+                key='download-csv'
+            )
+            
+            st.dataframe(
+                df_detalhes.style.background_gradient(
+                    subset=['Diferença'],
+                    cmap='RdYlGn_r'
+                ),
+                use_container_width=True
+            )
+            
+            # Tabela de Opções de Pagamento
+            st.subheader("Detalhes por Opção de Pagamento")
+            if df_options is not None:
+                df_options['Descrição'] = df_options['paymentOption'].map({
+                    'A': 'Opção A',
+                    'B': 'Opção B',
+                    'C': 'Opção C',
+                    'D': 'Opção D',
+                    'E': 'Cancelado'
+                })
+                
+                df_options_display = df_options[[
+                    'Descrição', 'total', 'pessoas'
+                ]].copy()
+                
+                df_options_display.columns = [
+                    'Opção', 'Total', 'Pessoas'
+                ]
+                
+                st.dataframe(
+                    df_options_display,
+                    use_container_width=True
+                )
             
             # Pessoas sem opção de pagamento
             st.subheader("Pessoas sem Opção de Pagamento")

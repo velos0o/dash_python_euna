@@ -1,6 +1,13 @@
 def get_family_status_query():
     return """
-    WITH sem_opcao_pagamento AS (
+    WITH requerentes_por_familia AS (
+        SELECT 
+            familia,
+            COUNT(DISTINCT unique_id) as total_requerentes_esperado
+        FROM familiares
+        GROUP BY familia
+    ),
+    status_atual AS (
         SELECT 
             ef.idfamilia,
             GROUP_CONCAT(
@@ -17,60 +24,36 @@ def get_family_status_query():
                         CASE 
                             WHEN ef.is_menor = 1 THEN 'Menor de idade'
                             ELSE 'Maior de idade'
-                        END,
-                        CASE 
-                            WHEN f.is_requerente_principal = 1 THEN 'Requerente Principal'
-                            ELSE 'Dependente'
-                        END,
-                        CASE 
-                            WHEN f.is_italiano = 1 THEN 'Italiano'
-                            ELSE 'Não Italiano'
-                        END,
-                        CASE 
-                            WHEN ef.isSpecial = 1 THEN 'Caso Especial'
-                            ELSE ''
-                        END,
-                        CASE 
-                            WHEN ef.hasTechnicalProblems = 1 THEN 'Problemas Técnicos'
-                            ELSE ''
-                        END,
-                        CASE 
-                            WHEN ef.aire = 1 THEN 'AIRE'
-                            ELSE ''
                         END
                     )
                 END
                 SEPARATOR '\n'
-            ) as pessoas_sem_opcao
+            ) as pessoas_sem_opcao,
+            SUM(CASE 
+                WHEN ef.paymentOption IN ('A', 'B', 'C', 'D') AND (
+                    ef.is_menor = 0 OR 
+                    TIMESTAMPDIFF(YEAR, ef.birthdate, CURDATE()) >= 12
+                ) THEN 1 
+                ELSE 0 
+            END) as continua,
+            SUM(CASE 
+                WHEN ef.paymentOption = 'E' THEN 1 
+                ELSE 0 
+            END) as cancelou,
+            COUNT(*) as total_atual
         FROM euna_familias ef
-        LEFT JOIN familiares f ON ef.idfamilia = f.unique_id
-        WHERE ef.paymentOption IS NULL OR ef.paymentOption = ''
+        LEFT JOIN familiares f ON ef.idfamilia = f.familia
         GROUP BY ef.idfamilia
-    ),
-    contagem_status AS (
-        SELECT 
-            idfamilia,
-            SUM(CASE WHEN paymentOption IN ('A', 'B', 'C', 'D') THEN 1 ELSE 0 END) as continua,
-            SUM(CASE WHEN paymentOption = 'E' THEN 1 ELSE 0 END) as cancelou
-        FROM euna_familias
-        GROUP BY idfamilia
-    ),
-    total_membros AS (
-        SELECT 
-            unique_id as idfamilia,
-            COUNT(DISTINCT id) as total_membros
-        FROM familiares
-        GROUP BY unique_id
     )
     SELECT 
-        cs.idfamilia,
-        COALESCE(sop.pessoas_sem_opcao, '') as pessoas_sem_opcao,
-        cs.continua,
-        cs.cancelou,
-        COALESCE(tm.total_membros, 0) as total_membros
-    FROM contagem_status cs
-    LEFT JOIN sem_opcao_pagamento sop ON cs.idfamilia = sop.idfamilia
-    LEFT JOIN total_membros tm ON cs.idfamilia = tm.idfamilia
+        sa.idfamilia,
+        sa.pessoas_sem_opcao,
+        sa.continua,
+        sa.cancelou,
+        sa.total_atual,
+        COALESCE(rpf.total_requerentes_esperado, 0) as total_requerentes_esperado
+    FROM status_atual sa
+    LEFT JOIN requerentes_por_familia rpf ON sa.idfamilia = rpf.familia
     """
 
 def get_payment_options_query():
@@ -78,9 +61,44 @@ def get_payment_options_query():
     SELECT 
         paymentOption,
         COUNT(*) as total,
-        GROUP_CONCAT(DISTINCT nome_completo SEPARATOR ', ') as pessoas
+        GROUP_CONCAT(
+            CONCAT(
+                nome_completo,
+                CASE 
+                    WHEN is_menor = 1 THEN ' (Menor)'
+                    WHEN TIMESTAMPDIFF(YEAR, birthdate, CURDATE()) >= 12 THEN ' (Maior 12)'
+                    ELSE ' (Menor 12)'
+                END
+            )
+            ORDER BY nome_completo
+            SEPARATOR ', '
+        ) as pessoas
     FROM euna_familias
     WHERE paymentOption IS NOT NULL AND paymentOption != ''
     GROUP BY paymentOption
-    ORDER BY paymentOption
+    ORDER BY 
+        CASE paymentOption
+            WHEN 'A' THEN 1
+            WHEN 'B' THEN 2
+            WHEN 'C' THEN 3
+            WHEN 'D' THEN 4
+            WHEN 'E' THEN 5
+            ELSE 6
+        END
+    """
+
+def get_deals_without_stage_query():
+    return """
+    SELECT 
+        d.ID,
+        d.TITLE,
+        d.STAGE_ID,
+        d.STAGE_NAME
+    FROM crm_deal d
+    JOIN crm_deal_uf uf ON d.ID = uf.DEAL_ID
+    WHERE 
+        d.CATEGORY_ID = 32
+        AND uf.UF_CRM_1738699062493 IS NOT NULL 
+        AND uf.UF_CRM_1738699062493 != ''
+        AND d.STAGE_ID != 'C32:UC_GBPN8V'
     """
