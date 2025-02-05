@@ -269,11 +269,51 @@ elif relatorio_selecionado == "Status das Famílias":
                     f"{df_report['cancelou'].sum() / df_report['total_membros'].sum():.1%}"
                 )
             
-            # Gráficos
+            # Atualizar query MySQL para incluir detalhes das opções de pagamento
+            query = """
+            SELECT 
+                paymentOption,
+                COUNT(*) as total
+            FROM euna_familias
+            WHERE is_menor = 0
+              AND isSpecial = 0
+              AND hasTechnicalProblems = 0
+            GROUP BY paymentOption
+            ORDER BY paymentOption
+            """
+            
+            try:
+                conn = mysql.connector.connect(
+                    host=st.secrets["mysql_host"],
+                    port=st.secrets["mysql_port"],
+                    database=st.secrets["mysql_database"],
+                    user=st.secrets["mysql_user"],
+                    password=st.secrets["mysql_password"]
+                )
+                df_payment_options = pd.read_sql(query, conn)
+            except Exception as e:
+                st.error(f"Erro ao consultar opções de pagamento: {e}")
+                return
+            finally:
+                if 'conn' in locals():
+                    conn.close()
+            
+            # Mapear descrições das opções de pagamento
+            payment_descriptions = {
+                'A': 'Opção A',
+                'B': 'Opção B',
+                'C': 'Opção C',
+                'D': 'Opção D',
+                'E': 'Cancelado'
+            }
+            
+            df_payment_options['Descrição'] = df_payment_options['paymentOption'].map(payment_descriptions)
+            
+            # Criar visualizações
             col1, col2 = st.columns(2)
             
             with col1:
-                # Gráfico de Pizza - Status
+                # Gráfico de Pizza - Status Geral
                 valores_status = [df_report['continua'].sum(), df_report['cancelou'].sum()]
                 labels_status = ['Continua', 'Cancelou']
                 
@@ -286,24 +326,30 @@ elif relatorio_selecionado == "Status das Famílias":
                 st.plotly_chart(fig_pie, use_container_width=True)
             
             with col2:
-                # Gráfico de Barras - Top 5 famílias
-                df_top5 = df_report.nlargest(5, 'total_membros')
-                
-                fig_bar = px.bar(
-                    df_top5,
-                    x='TITLE',
-                    y=['continua', 'cancelou'],
-                    title='Top 5 Famílias por Total de Membros',
-                    barmode='stack',
-                    color_discrete_sequence=['#00CC96', '#EF553B']
+                # Gráfico de Pizza - Distribuição por Opção de Pagamento
+                fig_payment = px.pie(
+                    df_payment_options,
+                    values='total',
+                    names='Descrição',
+                    title='Distribuição por Opção de Pagamento',
+                    color_discrete_sequence=['#00CC96', '#2ECC71', '#3498DB', '#9B59B6', '#EF553B']
                 )
-                
-                fig_bar.update_layout(
-                    xaxis_title="Família",
-                    yaxis_title="Quantidade",
-                    showlegend=True
+                fig_payment.update_traces(
+                    textposition='inside',
+                    textinfo='percent+label+value'
                 )
-                st.plotly_chart(fig_bar, use_container_width=True)
+                st.plotly_chart(fig_payment, use_container_width=True)
+            
+            # Adicionar tabela com detalhes das opções de pagamento
+            st.subheader("Detalhes por Opção de Pagamento")
+            df_payment_details = df_payment_options.copy()
+            df_payment_details.columns = ['Opção', 'Total', 'Descrição']
+            df_payment_details['Percentual'] = (df_payment_details['Total'] / df_payment_details['Total'].sum() * 100).round(1).astype(str) + '%'
+            st.dataframe(
+                df_payment_details[['Descrição', 'Total', 'Percentual']],
+                hide_index=True,
+                use_container_width=True
+            )
             
             # Tabela detalhada
             st.subheader("Detalhes por Família")
