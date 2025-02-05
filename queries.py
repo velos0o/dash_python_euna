@@ -1,59 +1,42 @@
 def get_family_status_query():
     return """
-    WITH requerentes_por_familia AS (
+    WITH status_atual AS (
         SELECT 
-            familia,
-            COUNT(DISTINCT unique_id) as total_requerentes_esperado
-        FROM familiares
-        GROUP BY familia
-    ),
-    status_atual AS (
-        SELECT 
-            ef.idfamilia,
+            idfamilia,
             GROUP_CONCAT(
                 CASE 
-                    WHEN ef.paymentOption IS NULL OR ef.paymentOption = '' 
+                    WHEN paymentOption IS NULL OR paymentOption = '' 
                     THEN CONCAT_WS(' | ',
-                        COALESCE(f.nome_familia, ef.nome_completo),
-                        CONCAT('CPF: ', COALESCE(f.cpf, 'Não informado')),
-                        CONCAT('RG: ', COALESCE(f.rg, 'Não informado')),
-                        CONCAT('Passaporte: ', COALESCE(f.passaporte, 'Não informado')),
-                        CONCAT('WhatsApp: ', COALESCE(f.whatsapp, ef.telefone, 'Não informado')),
-                        CONCAT('Email: ', COALESCE(ef.`e-mail`, 'Não informado')),
-                        CONCAT('Idade: ', TIMESTAMPDIFF(YEAR, ef.birthdate, CURDATE())),
+                        nome_completo,
+                        telefone,
+                        `e-mail`,
+                        CONCAT('Idade: ', TIMESTAMPDIFF(YEAR, birthdate, CURDATE())),
                         CASE 
-                            WHEN ef.is_menor = 1 THEN 'Menor de idade'
+                            WHEN is_menor = 1 THEN 'Menor de idade'
                             ELSE 'Maior de idade'
                         END
                     )
                 END
                 SEPARATOR '\n'
             ) as pessoas_sem_opcao,
-            SUM(CASE 
-                WHEN ef.paymentOption IN ('A', 'B', 'C', 'D') AND (
-                    ef.is_menor = 0 OR 
-                    TIMESTAMPDIFF(YEAR, ef.birthdate, CURDATE()) >= 12
-                ) THEN 1 
-                ELSE 0 
+            COUNT(CASE 
+                WHEN paymentOption IN ('A', 'B', 'C', 'D') THEN 1 
             END) as continua,
-            SUM(CASE 
-                WHEN ef.paymentOption = 'E' THEN 1 
-                ELSE 0 
+            COUNT(CASE 
+                WHEN paymentOption = 'E' THEN 1 
             END) as cancelou,
             COUNT(*) as total_atual
-        FROM euna_familias ef
-        LEFT JOIN familiares f ON ef.idfamilia = f.familia
-        GROUP BY ef.idfamilia
+        FROM euna_familias
+        GROUP BY idfamilia
     )
     SELECT 
-        sa.idfamilia,
-        sa.pessoas_sem_opcao,
-        sa.continua,
-        sa.cancelou,
-        sa.total_atual,
-        COALESCE(rpf.total_requerentes_esperado, 0) as total_requerentes_esperado
-    FROM status_atual sa
-    LEFT JOIN requerentes_por_familia rpf ON sa.idfamilia = rpf.familia
+        idfamilia,
+        pessoas_sem_opcao,
+        continua,
+        cancelou,
+        total_atual,
+        total_atual as total_esperado
+    FROM status_atual
     """
 
 def get_payment_options_query():

@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
+import plotly.graph_objects as go
 from datetime import datetime, timedelta
 from bitrix_api import Bitrix24API
 from database import Database
@@ -297,18 +298,23 @@ elif relatorio_selecionado == "Status das Famílias":
                 )
             
             with col2:
+                total_ativos = int(df_report['continua'].sum())
+                total_geral = int(df_report['total_atual'].sum())
+                
                 st.metric(
                     "Famílias Ativas",
-                    f"{int(df_report['continua'].sum()):,}".replace(",", "."),
-                    f"{(df_report['continua'].sum() / len(df_report) * 100):.0f}%",
+                    f"{total_ativos:,}".replace(",", "."),
+                    f"{(total_ativos / total_geral * 100):.0f}%" if total_geral > 0 else "0%",
                     delta_color="normal"
                 )
             
             with col3:
+                total_cancelados = int(df_report['cancelou'].sum())
+                
                 st.metric(
                     "Famílias Canceladas",
-                    f"{int(df_report['cancelou'].sum()):,}".replace(",", "."),
-                    f"{(df_report['cancelou'].sum() / len(df_report) * 100):.0f}%",
+                    f"{total_cancelados:,}".replace(",", "."),
+                    f"{(total_cancelados / total_geral * 100):.0f}%" if total_geral > 0 else "0%",
                     delta_color="normal"
                 )
             
