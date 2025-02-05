@@ -269,34 +269,32 @@ elif relatorio_selecionado == "Status das Famílias":
                     f"{df_report['cancelou'].sum() / df_report['total_membros'].sum():.1%}"
                 )
             
-            # Atualizar query MySQL para incluir detalhes das opções de pagamento
-            query = """
-            SELECT 
-                paymentOption,
-                COUNT(*) as total
-            FROM euna_familias
-            WHERE is_menor = 0
-              AND isSpecial = 0
-              AND hasTechnicalProblems = 0
-            GROUP BY paymentOption
-            ORDER BY paymentOption
-            """
+            # Consultar distribuição das opções de pagamento
+            df_payment_options = pd.DataFrame()
             
             try:
-                conn = mysql.connector.connect(
+                with mysql.connector.connect(
                     host=st.secrets["mysql_host"],
                     port=st.secrets["mysql_port"],
                     database=st.secrets["mysql_database"],
                     user=st.secrets["mysql_user"],
                     password=st.secrets["mysql_password"]
-                )
-                df_payment_options = pd.read_sql(query, conn)
+                ) as conn:
+                    query = """
+                    SELECT 
+                        paymentOption,
+                        COUNT(*) as total
+                    FROM euna_familias
+                    WHERE is_menor = 0
+                      AND isSpecial = 0
+                      AND hasTechnicalProblems = 0
+                    GROUP BY paymentOption
+                    ORDER BY paymentOption
+                    """
+                    df_payment_options = pd.read_sql(query, conn)
             except Exception as e:
                 st.error(f"Erro ao consultar opções de pagamento: {e}")
-                return
-            finally:
-                if 'conn' in locals():
-                    conn.close()
+                df_payment_options = pd.DataFrame(columns=['paymentOption', 'total'])
             
             # Mapear descrições das opções de pagamento
             payment_descriptions = {
