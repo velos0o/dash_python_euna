@@ -45,13 +45,18 @@ st.markdown(
     unsafe_allow_html=True
 )
 
-# Cabeçalho com logo
-col1, col2 = st.columns([1, 4])
-with col1:
-    st.image("assets/logo.png", width=150)
-with col2:
-    st.title("Sistema de Relatórios - Eu na Europa")
-    st.markdown(f"<p style='color: {COLORS['azul']}'>Análise de Famílias e Requerentes</p>", unsafe_allow_html=True)
+# Cabeçalho
+st.markdown(
+    f"""
+    <h1 style='color: {COLORS['azul']}'>
+        🇪🇺 Sistema de Relatórios - Eu na Europa
+    </h1>
+    <p style='color: {COLORS['azul']}; font-size: 1.2em;'>
+        🇮🇹 Análise de Famílias e Requerentes
+    </p>
+    """,
+    unsafe_allow_html=True
+)
 
 # Configurações do Bitrix24 (usando secrets)
 BITRIX_BASE_URL = st.secrets["bitrix24_base_url"]
