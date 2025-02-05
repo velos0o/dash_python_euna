@@ -14,9 +14,13 @@
             
             # Calcular totais
             total_familias = len(df_sem_total)
-            total_pessoas_euna = int(totais['Total_euna'])
-            total_sem_opcao = int(totais['Sem_Opcao'])
-            total_esperado = int(totais['total_requerentes_esperado'])
+            familias_continuam = len(df_sem_total[
+                (df_sem_total['A'] > 0) | 
+                (df_sem_total['B'] > 0) | 
+                (df_sem_total['C'] > 0) | 
+                (df_sem_total['D'] > 0)
+            ])
+            familias_canceladas = len(df_sem_total[df_sem_total['E'] > 0])
             
             with col1:
                 st.metric(
@@ -27,71 +31,24 @@
             
             with col2:
                 st.metric(
-                    "Pessoas em euna_familias",
-                    f"{total_pessoas_euna:,}".replace(",", "."),
-                    f"{total_sem_opcao:,} sem opção".replace(",", "."),
-                    help="Total de pessoas na tabela euna_familias"
+                    "Famílias Continuam",
+                    f"{familias_continuam:,}".replace(",", "."),
+                    f"{(familias_continuam/total_familias*100):.1f}% do total",
+                    help="Famílias com opções A, B, C ou D"
                 )
             
             with col3:
                 st.metric(
-                    "Requerentes Esperados",
-                    f"{total_esperado:,}".replace(",", "."),
-                    f"Diferença: {total_esperado - total_pessoas_euna:,}".replace(",", "."),
-                    help="Total de requerentes na tabela familiares"
+                    "Famílias Canceladas",
+                    f"{familias_canceladas:,}".replace(",", "."),
+                    f"{(familias_canceladas/total_familias*100):.1f}% do total",
+                    help="Famílias com opção E"
                 )
             
-            # Análise dos dados
+            # Divisor
             st.markdown("---")
-            st.markdown(f"<h3 style='color: {COLORS['azul']}'>Análise dos Dados</h3>", unsafe_allow_html=True)
-            
-            # Calcular métricas para análise
-            familias_incompletas = len(df_sem_total[df_sem_total['diferenca_requerentes'] > 0])
-            familias_com_pendentes = len(df_sem_total[df_sem_total['Sem_Opcao'] > 0])
-            
-            # Mostrar insights
-            st.markdown(f"""
-                #### Pontos de Atenção:
-                
-                1. **Pessoas sem Opção de Pagamento**:
-                   - {total_sem_opcao:,} pessoas ainda não escolheram uma opção
-                   - Isso representa {(total_sem_opcao/total_pessoas_euna*100):.1f}% do total em euna_familias
-                   - Afeta {familias_com_pendentes:,} famílias ({(familias_com_pendentes/total_familias*100):.1f}% do total)
-                
-                2. **Diferença entre Bases**:
-                   - Esperados: {total_esperado:,} requerentes (tabela familiares)
-                   - Atual: {total_pessoas_euna:,} pessoas (tabela euna_familias)
-                   - Diferença: {total_esperado - total_pessoas_euna:,} pessoas
-                   - {familias_incompletas:,} famílias ({(familias_incompletas/total_familias*100):.1f}%) têm menos pessoas que o esperado
-                
-                #### Distribuição por Opção:
-                - Opção A: {int(totais['A']):,} pessoas ({(totais['A']/total_pessoas_euna*100):.1f}%)
-                - Opção B: {int(totais['B']):,} pessoas ({(totais['B']/total_pessoas_euna*100):.1f}%)
-                - Opção C: {int(totais['C']):,} pessoas ({(totais['C']/total_pessoas_euna*100):.1f}%)
-                - Opção D: {int(totais['D']):,} pessoas ({(totais['D']/total_pessoas_euna*100):.1f}%)
-                - Opção E: {int(totais['E']):,} pessoas ({(totais['E']/total_pessoas_euna*100):.1f}%)
-                - Sem Opção: {int(totais['Sem_Opcao']):,} pessoas ({(totais['Sem_Opcao']/total_pessoas_euna*100):.1f}%)
-            """.replace(",", "."), unsafe_allow_html=True)
-            
-            # Questionamentos
-            st.markdown(f"""
-                #### Questionamentos:
-                
-                1. **Pessoas sem Opção**:
-                   - Por que {total_sem_opcao:,} pessoas ainda não escolheram uma opção?
-                   - Existe algum padrão nas famílias com pessoas pendentes?
-                
-                2. **Diferença entre Bases**:
-                   - Por que existem {abs(total_esperado - total_pessoas_euna):,} pessoas de diferença?
-                   - As famílias sabem que têm membros faltando?
-                
-                3. **Distribuição**:
-                   - Por que a opção {['A','B','C','D'][totais[['A','B','C','D']].argmax()]} é a mais escolhida?
-                   - O que leva as pessoas a escolherem cada opção?
-            """.replace(",", "."), unsafe_allow_html=True)
             
             # Tabela detalhada
-            st.markdown("---")
             st.markdown(f"<h3 style='color: {COLORS['azul']}'>Detalhamento por Família</h3>", unsafe_allow_html=True)
             
             # Buscar nomes do Bitrix24
@@ -120,14 +77,29 @@
                 
                 # Selecionar e renomear colunas
                 df_display = df_detalhes[[
-                    'Nome_Exibicao', 'A', 'B', 'C', 'D', 'E', 'Sem_Opcao',
-                    'Total_euna', 'total_requerentes_esperado', 'diferenca_requerentes'
+                    'Nome_Exibicao', 'A', 'B', 'C', 'D', 'E'
                 ]].copy()
                 
                 df_display.columns = [
-                    'Família', 'A', 'B', 'C', 'D', 'E', 'Sem Opção',
-                    'Total Atual', 'Total Esperado', 'Diferença'
+                    'Família', 'A', 'B', 'C', 'D', 'E'
                 ]
+                
+                # Calcular totais
+                df_display['Total'] = df_display[['A', 'B', 'C', 'D', 'E']].sum(axis=1)
+                
+                # Adicionar status
+                df_display['Status'] = 'Pendente'
+                df_display.loc[
+                    (df_display['A'] > 0) | 
+                    (df_display['B'] > 0) | 
+                    (df_display['C'] > 0) | 
+                    (df_display['D'] > 0), 
+                    'Status'
+                ] = 'Continua'
+                df_display.loc[df_display['E'] > 0, 'Status'] = 'Cancelou'
+                
+                # Ordenar por status e nome
+                df_display = df_display.sort_values(['Status', 'Família'])
                 
                 # Adicionar botão de download
                 csv = df_display.to_csv(index=False)
@@ -140,11 +112,77 @@
                 )
                 
                 # Mostrar tabela
-                st.dataframe(df_display, use_container_width=True)
+                st.dataframe(
+                    df_display,
+                    use_container_width=True,
+                    column_config={
+                        'Família': st.column_config.TextColumn(
+                            'Família',
+                            width='large'
+                        ),
+                        'A': st.column_config.NumberColumn(
+                            'A',
+                            help='Opção A'
+                        ),
+                        'B': st.column_config.NumberColumn(
+                            'B',
+                            help='Opção B'
+                        ),
+                        'C': st.column_config.NumberColumn(
+                            'C',
+                            help='Opção C'
+                        ),
+                        'D': st.column_config.NumberColumn(
+                            'D',
+                            help='Opção D'
+                        ),
+                        'E': st.column_config.NumberColumn(
+                            'E',
+                            help='Opção E (Cancelados)'
+                        ),
+                        'Total': st.column_config.NumberColumn(
+                            'Total',
+                            help='Total de pessoas'
+                        ),
+                        'Status': st.column_config.TextColumn(
+                            'Status',
+                            help='Status da família'
+                        )
+                    }
+                )
                 
-                # Mostrar detalhes das pessoas sem opção
-                if st.checkbox("Ver detalhes das pessoas sem opção de pagamento"):
-                    st.markdown(f"<h4 style='color: {COLORS['azul']}'>Pessoas sem Opção de Pagamento</h4>", unsafe_allow_html=True)
-                    for _, row in df_detalhes[df_detalhes['pessoas_sem_opcao'].notna()].iterrows():
-                        with st.expander(f"Família: {row['Nome_Exibicao']}"):
-                            st.text(row['pessoas_sem_opcao'])
+                # Mostrar gráfico de pizza com distribuição
+                col1, col2 = st.columns(2)
+                
+                with col1:
+                    # Gráfico de pizza - Status das famílias
+                    status_counts = df_display['Status'].value_counts()
+                    fig_status = px.pie(
+                        values=status_counts.values,
+                        names=status_counts.index,
+                        title='Distribuição por Status',
+                        color_discrete_sequence=[COLORS['verde'], COLORS['vermelho'], COLORS['azul']]
+                    )
+                    fig_status.update_traces(textinfo='percent+value')
+                    st.plotly_chart(fig_status, use_container_width=True)
+                
+                with col2:
+                    # Gráfico de pizza - Distribuição por opção
+                    opcoes = {
+                        'A': int(totais['A']),
+                        'B': int(totais['B']),
+                        'C': int(totais['C']),
+                        'D': int(totais['D']),
+                        'E': int(totais['E'])
+                    }
+                    fig_opcoes = px.pie(
+                        values=list(opcoes.values()),
+                        names=list(opcoes.keys()),
+                        title='Distribuição por Opção',
+                        color_discrete_sequence=[
+                            COLORS['verde'], '#2ECC71', '#3498DB', 
+                            '#9B59B6', COLORS['vermelho']
+                        ]
+                    )
+                    fig_opcoes.update_traces(textinfo='percent+value')
+                    st.plotly_chart(fig_opcoes, use_container_width=True)
