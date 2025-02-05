@@ -17,18 +17,26 @@ st.set_page_config(
 BITRIX_BASE_URL = st.secrets["bitrix24_base_url"]
 BITRIX_TOKEN = st.secrets["bitrix24_token"]
 
-def consultar_bitrix(table, filtros=None):
-    """Função para consultar a API do Bitrix24"""
+from bitrix_queries import get_deals_filter, get_deal_uf_filter
+
+def consultar_bitrix(table, filtros=None, start_date=None, end_date=None):
+    """Função otimizada para consultar a API do Bitrix24"""
     url = f"{BITRIX_BASE_URL}?token={BITRIX_TOKEN}&table={table}"
     
-    if filtros:
-        response = requests.post(url, json=filtros)
-    else:
-        response = requests.get(url)
+    # Se não houver filtros específicos, usar os filtros otimizados
+    if not filtros:
+        if table == "crm_deal":
+            filtros = get_deals_filter(start_date, end_date)
+        elif table == "crm_deal_uf":
+            filtros = get_deal_uf_filter()
     
-    if response.status_code == 200:
+    try:
+        response = requests.post(url, json=filtros, timeout=30)
+        response.raise_for_status()
         return response.json()
-    return None
+    except requests.exceptions.RequestException as e:
+        st.error(f"Erro ao consultar Bitrix24: {str(e)}")
+        return None
 
 def get_mysql_data():
     """Busca dados do MySQL"""
@@ -64,21 +72,27 @@ def get_mysql_data():
             conn.close()
 
 def criar_relatorio_funil():
-    """Criar relatório do funil de famílias"""
+    """Criar relatório otimizado do funil de famílias"""
     with st.spinner("Analisando dados do Bitrix24..."):
-        # 1. Consultar deals (categoria 32)
-        filtros_deal = {
-            "dimensionsFilters": [[
-                {
-                    "fieldName": "CATEGORY_ID",
-                    "values": [32],
-                    "type": "INCLUDE",
-                    "operator": "EQUALS"
-                }
-            ]]
-        }
+        # Filtros de data
+        col1, col2 = st.columns(2)
+        with col1:
+            start_date = st.date_input(
+                "Data Inicial",
+                value=(datetime.now() - timedelta(days=30))
+            )
+        with col2:
+            end_date = st.date_input(
+                "Data Final",
+                value=datetime.now()
+            )
         
-        deals_df = consultar_bitrix("crm_deal", filtros_deal)
+        # 1. Consultar deals com filtros otimizados
+        deals_df = consultar_bitrix(
+            "crm_deal",
+            start_date=start_date.strftime("%Y-%m-%d"),
+            end_date=end_date.strftime("%Y-%m-%d")
+        )
         
         if deals_df is None:
             st.error("❌ Não foi possível obter os dados de deals")
