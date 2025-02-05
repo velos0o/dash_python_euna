@@ -138,6 +138,68 @@ if df_mysql is not None:
                 str(df_exibir['Cancelados'].sum())
             )
         
-        # Tabela
+        # Tabela de Detalhamento por Família
         st.markdown("### Detalhamento por Família")
         st.dataframe(df_exibir)
+
+        # Separador visual
+        st.markdown("---")
+
+        # Nova seção para Status das Famílias
+        st.markdown("### Status das Famílias")
+        
+        # Query para buscar status das famílias
+        query_status = """
+        SELECT 
+            f.idfamilia,
+            f.paymentOption as status,
+            f.name,
+            f.email,
+            f.phone
+        FROM euna_familias f
+        WHERE f.is_menor = 0
+          AND f.isSpecial = 0
+          AND f.hasTechnicalProblems = 0
+        """
+        
+        try:
+            conn = mysql.connector.connect(
+                host=st.secrets["mysql_host"],
+                port=st.secrets["mysql_port"],
+                database=st.secrets["mysql_database"],
+                user=st.secrets["mysql_user"],
+                password=st.secrets["mysql_password"]
+            )
+            
+            df_status = pd.read_sql(query_status, conn)
+            
+            # Dropdown para selecionar o status
+            status_selecionado = st.selectbox(
+                "Filtrar por Status:",
+                ['Todos', 'A', 'B', 'C', 'D', 'E']
+            )
+            
+            # Filtrando os dados
+            if status_selecionado != 'Todos':
+                df_status_filtrado = df_status[df_status['status'] == status_selecionado]
+            else:
+                df_status_filtrado = df_status
+            
+            # Renomeando colunas para exibição
+            df_status_filtrado.columns = ['ID Família', 'Status', 'Nome', 'Email', 'Telefone']
+            
+            # Mostrando a tabela
+            if not df_status_filtrado.empty:
+                st.dataframe(
+                    df_status_filtrado,
+                    hide_index=True,
+                    use_container_width=True
+                )
+            else:
+                st.info("Nenhum registro encontrado para este status.")
+                
+        except Exception as e:
+            st.error(f"Erro ao buscar dados de status: {e}")
+        finally:
+            if 'conn' in locals():
+                conn.close()
