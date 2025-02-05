@@ -99,13 +99,22 @@
                     st.markdown("---")
                     st.markdown(f"<h3 style='color: {COLORS['azul']}'>Detalhamento por Família</h3>", unsafe_allow_html=True)
                     
-                    # Preparar dados para exibição
-                    df_display = df_report[['TITLE', 'continua', 'cancelou', 'total_membros']].copy()
+                    # Debug - mostrar colunas disponíveis
+                    st.write("Colunas disponíveis:", list(df_report.columns))
                     
-                    # Garantir que as colunas numéricas são números
-                    colunas_numericas = ['continua', 'cancelou', 'total_membros']
-                    for col in colunas_numericas:
-                        df_display[col] = pd.to_numeric(df_display[col], errors='coerce').fillna(0).astype(int)
+                    # Preparar dados para exibição
+                    colunas_exibir = ['TITLE']
+                    if 'continua' in df_report.columns:
+                        colunas_exibir.append('continua')
+                    if 'cancelou' in df_report.columns:
+                        colunas_exibir.append('cancelou')
+                    if 'total_membros' in df_report.columns:
+                        colunas_exibir.append('total_membros')
+                    
+                    df_display = df_report[colunas_exibir].copy()
+                    
+                    # Debug - mostrar dados antes da conversão
+                    st.write("Primeiras linhas dos dados:", df_display.head())
                     
                     df_display.columns = ['Família', 'Continua', 'Cancelou', 'Total Membros']
                     
