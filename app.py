@@ -25,51 +25,44 @@ def get_mysql_data():
             password=st.secrets['mysql_password']
         )
         
-        query = '''
-        WITH dados_familia AS (
-            SELECT 
-                idfamilia,
-                SUM(CASE WHEN paymentOption IN ('A', 'B', 'C', 'D') THEN 1 ELSE 0 END) as continua,
-                SUM(CASE WHEN paymentOption = 'E' THEN 1 ELSE 0 END) as cancelou,
-                COUNT(*) as total_membros,
-                GROUP_CONCAT(
-                    CASE 
-                        WHEN paymentOption IS NULL OR paymentOption = '' 
-                        THEN CONCAT_WS(' | ',
-                            nome_completo,
-                            telefone,
-                            `e-mail`,
-                            CASE WHEN is_menor = 1 THEN 'Menor' ELSE 'Maior' END
-                        )
-                    END
-                    SEPARATOR '\n'
-                ) as requerentes_sem_opcao
-            FROM euna_familias
-            WHERE is_menor = 0
-              AND isSpecial = 0
-              AND hasTechnicalProblems = 0
-            GROUP BY idfamilia
-        )
+        # Query principal para status das famílias
+        query_status = '''
         SELECT 
             idfamilia,
-            continua,
-            cancelou,
-            total_membros,
-            requerentes_sem_opcao,
-            (
-                SELECT COUNT(*)
-                FROM euna_familias e2
-                WHERE e2.idfamilia = dados_familia.idfamilia
-                AND (e2.paymentOption IS NULL OR e2.paymentOption = '')
-            ) as total_sem_opcao
-        FROM dados_familia
+            SUM(CASE WHEN paymentOption IN ('A', 'B', 'C', 'D') THEN 1 ELSE 0 END) as continua,
+            SUM(CASE WHEN paymentOption = 'E' THEN 1 ELSE 0 END) as cancelou,
+            COUNT(*) as total_membros
+        FROM euna_familias
+        WHERE is_menor = 0
+          AND isSpecial = 0
+          AND hasTechnicalProblems = 0
+        GROUP BY idfamilia
         '''
         
-        df = pd.read_sql(query, conn)
-        return df
+        # Query para pessoas sem opção
+        query_sem_opcao = '''
+        SELECT 
+            idfamilia,
+            nome_completo,
+            telefone,
+            `e-mail` as email,
+            CASE WHEN is_menor = 1 THEN 'Menor' ELSE 'Maior' END as status_idade
+        FROM euna_familias
+        WHERE (paymentOption IS NULL OR paymentOption = '')
+          AND is_menor = 0
+          AND isSpecial = 0
+          AND hasTechnicalProblems = 0
+        ORDER BY idfamilia, nome_completo
+        '''
+        
+        df_status = pd.read_sql(query_status, conn)
+        df_sem_opcao = pd.read_sql(query_sem_opcao, conn)
+        
+        return df_status, df_sem_opcao
+        
     except Exception as e:
         st.error(f'Erro ao conectar ao MySQL: {e}')
-        return None
+        return None, None
     finally:
         if 'conn' in locals():
             conn.close()
@@ -86,9 +79,9 @@ def consultar_bitrix(table, filtros=None):
     return None
 
 # Carregar dados do MySQL
-df_mysql = get_mysql_data()
+df_status, df_sem_opcao = get_mysql_data()
 
-if df_mysql is not None:
+if df_status is not None:
     # Buscar dados do Bitrix24
     filtros_deal = {
         'dimensionsFilters': [[{
@@ -118,7 +111,7 @@ if df_mysql is not None:
         
         # Juntar com dados do MySQL
         df_final = pd.merge(
-            df_mysql,
+            df_status,
             df_bitrix[['UF_CRM_1722605592778', 'TITLE']],
             left_on='idfamilia',
             right_on='UF_CRM_1722605592778',
@@ -133,8 +126,7 @@ if df_mysql is not None:
             'nome_familia',
             'continua',
             'cancelou',
-            'total_membros',
-            'total_sem_opcao'
+            'total_membros'
         ]].copy()
         
         # Renomear colunas
@@ -142,8 +134,7 @@ if df_mysql is not None:
             'Família',
             'Ativos',
             'Cancelados',
-            'Total',
-            'Sem Opção'
+            'Total'
         ]
         
         # Métricas
@@ -182,26 +173,48 @@ if df_mysql is not None:
         st.markdown('### Detalhamento por Família')
         st.dataframe(df_exibir)
         
-        # Seção de requerentes sem opção
-        st.markdown('---')
-        st.markdown('### Requerentes sem Opção de Pagamento')
-        
-        # Filtrar famílias que têm requerentes sem opção
-        df_sem_opcao = df_final[
-            df_final['total_sem_opcao'] > 0
-        ].copy()
-        
-        if len(df_sem_opcao) > 0:
+        # Seção de pessoas sem opção
+        if df_sem_opcao is not None and len(df_sem_opcao) > 0:
+            st.markdown('---')
+            st.markdown('### Pessoas sem Opção de Pagamento')
+            
+            # Juntar com nomes do Bitrix24
+            df_sem_opcao = pd.merge(
+                df_sem_opcao,
+                df_bitrix[['UF_CRM_1722605592778', 'TITLE']],
+                left_on='idfamilia',
+                right_on='UF_CRM_1722605592778',
+                how='left'
+            )
+            df_sem_opcao['nome_familia'] = df_sem_opcao['TITLE'].fillna(df_sem_opcao['idfamilia'])
+            
+            # Agrupar por família
+            familias_unicas = df_sem_opcao['nome_familia'].unique()
+            
             # Mostrar total
             st.metric(
-                'Total de Famílias com Requerentes Pendentes',
+                'Total de Pessoas sem Opção',
                 str(len(df_sem_opcao)),
-                f'Total de {df_sem_opcao["total_sem_opcao"].sum()} requerentes'
+                f'Em {len(familias_unicas)} famílias'
             )
             
-            # Mostrar detalhes de cada família
-            for _, row in df_sem_opcao.iterrows():
-                with st.expander(f'Família: {row["nome_familia"]} ({row["total_sem_opcao"]} requerentes)'):
-                    st.text(row['requerentes_sem_opcao'])
-        else:
-            st.info('Não há requerentes sem opção de pagamento.')
+            # Mostrar por família
+            for familia in sorted(familias_unicas):
+                pessoas = df_sem_opcao[df_sem_opcao['nome_familia'] == familia]
+                with st.expander(f'Família: {familia} ({len(pessoas)} pessoas)'):
+                    # Preparar dados para exibição
+                    df_pessoas = pessoas[[
+                        'nome_completo',
+                        'telefone',
+                        'email',
+                        'status_idade'
+                    ]].copy()
+                    
+                    df_pessoas.columns = [
+                        'Nome',
+                        'Telefone',
+                        'Email',
+                        'Status'
+                    ]
+                    
+                    st.dataframe(df_pessoas)
