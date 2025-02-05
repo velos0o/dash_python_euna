@@ -1,157 +1,132 @@
-            # Métricas detalhadas
+            # Status das Famílias
             st.markdown(f"""
                 <h2 style='color: {COLORS["azul"]}; margin-bottom: 1rem;'>
-                    📊 Métricas por Opção de Pagamento
+                    Status das Famílias
                 </h2>
             """, unsafe_allow_html=True)
             
-            # Pegar linha de totais
+            # Pegar linha de totais e dados sem total
             totais = df_report[df_report['ID_Familia'] == 'TOTAL'].iloc[0]
             df_sem_total = df_report[df_report['ID_Familia'] != 'TOTAL']
             
             # Primeira linha - Totais
             col1, col2, col3 = st.columns(3)
             
-            total_requerentes = totais['A'] + totais['B'] + totais['C'] + totais['D'] + totais['E']
+            # Total de Famílias
             total_familias = len(df_sem_total)
+            familias_continuam = len(df_sem_total[df_sem_total['status_familia'] == 'Continua'])
+            familias_cancelaram = len(df_sem_total[df_sem_total['status_familia'] == 'Cancelou'])
             
             with col1:
-                st.metric(
-                    "Total de Requerentes",
-                    f"{int(total_requerentes):,}".replace(",", "."),
-                    help="Total de requerentes em todas as opções"
-                )
-            
-            with col2:
                 st.metric(
                     "Total de Famílias",
                     f"{total_familias:,}".replace(",", "."),
-                    f"Média: {total_requerentes/total_familias:.1f}/família",
-                    help="Total de famílias"
+                    help="Total de famílias cadastradas"
+                )
+            
+            with col2:
+                st.metric(
+                    "Famílias que Continuam",
+                    f"{familias_continuam:,}".replace(",", "."),
+                    f"{(familias_continuam/total_familias*100):.1f}% do total",
+                    help="Famílias com opções A, B, C ou D"
                 )
             
             with col3:
-                familias_sem_opcao = len(df_sem_total[
-                    (df_sem_total['A'] == 0) & 
-                    (df_sem_total['B'] == 0) & 
-                    (df_sem_total['C'] == 0) & 
-                    (df_sem_total['D'] == 0) & 
-                    (df_sem_total['E'] == 0)
-                ])
                 st.metric(
-                    "Aguardando Definição",
-                    f"{familias_sem_opcao:,}".replace(",", "."),
-                    f"{(familias_sem_opcao/total_familias*100):.1f}% das famílias",
-                    help="Famílias sem opção definida"
+                    "Famílias que Cancelaram",
+                    f"{familias_cancelaram:,}".replace(",", "."),
+                    f"{(familias_cancelaram/total_familias*100):.1f}% do total",
+                    help="Famílias com opção E"
                 )
             
             # Divisor
             st.markdown("---")
             
-            # Segunda linha - Opções A, B e C
-            col1, col2, col3 = st.columns(3)
+            # Segunda linha - Comparativo de Requerentes
+            st.markdown(f"<h3 style='color: {COLORS['azul']}'>Comparativo de Requerentes</h3>", unsafe_allow_html=True)
             
-            with col1:
-                familias_a = len(df_sem_total[df_sem_total['A'] > 0])
-                st.metric(
-                    "Opção A",
-                    f"{int(totais['A']):,}".replace(",", "."),
-                    f"{(totais['A']/total_requerentes*100):.1f}% dos requerentes",
-                    help="Requerentes na opção A"
-                )
-                if familias_a > 0:
-                    st.markdown(f"<small>{familias_a:,} famílias • {totais['A']/familias_a:.1f}/família</small>".replace(",", "."), unsafe_allow_html=True)
-            
-            with col2:
-                familias_b = len(df_sem_total[df_sem_total['B'] > 0])
-                st.metric(
-                    "Opção B",
-                    f"{int(totais['B']):,}".replace(",", "."),
-                    f"{(totais['B']/total_requerentes*100):.1f}% dos requerentes",
-                    help="Requerentes na opção B"
-                )
-                if familias_b > 0:
-                    st.markdown(f"<small>{familias_b:,} famílias • {totais['B']/familias_b:.1f}/família</small>".replace(",", "."), unsafe_allow_html=True)
-            
-            with col3:
-                familias_c = len(df_sem_total[df_sem_total['C'] > 0])
-                st.metric(
-                    "Opção C",
-                    f"{int(totais['C']):,}".replace(",", "."),
-                    f"{(totais['C']/total_requerentes*100):.1f}% dos requerentes",
-                    help="Requerentes na opção C"
-                )
-                if familias_c > 0:
-                    st.markdown(f"<small>{familias_c:,} famílias • {totais['C']/familias_c:.1f}/família</small>".replace(",", "."), unsafe_allow_html=True)
-            
-            # Terceira linha - Opções D e E
             col1, col2 = st.columns(2)
             
+            # Total de requerentes em euna_familias
+            total_euna = df_sem_total['A'].sum() + df_sem_total['B'].sum() + \
+                        df_sem_total['C'].sum() + df_sem_total['D'].sum() + \
+                        df_sem_total['E'].sum()
+            
+            # Total de requerentes em familiares
+            total_familiares = df_sem_total['total_requerentes_esperado'].sum()
+            
             with col1:
-                familias_d = len(df_sem_total[df_sem_total['D'] > 0])
                 st.metric(
-                    "Opção D",
-                    f"{int(totais['D']):,}".replace(",", "."),
-                    f"{(totais['D']/total_requerentes*100):.1f}% dos requerentes",
-                    help="Requerentes na opção D"
+                    "Requerentes em euna_familias",
+                    f"{int(total_euna):,}".replace(",", "."),
+                    help="Total de requerentes na tabela euna_familias"
                 )
-                if familias_d > 0:
-                    st.markdown(f"<small>{familias_d:,} famílias • {totais['D']/familias_d:.1f}/família</small>".replace(",", "."), unsafe_allow_html=True)
             
             with col2:
-                familias_e = len(df_sem_total[df_sem_total['E'] > 0])
                 st.metric(
-                    "Cancelados (E)",
-                    f"{int(totais['E']):,}".replace(",", "."),
-                    f"{(totais['E']/total_requerentes*100):.1f}% dos requerentes",
-                    help="Requerentes que cancelaram"
+                    "Requerentes em familiares",
+                    f"{int(total_familiares):,}".replace(",", "."),
+                    help="Total de requerentes na tabela familiares"
                 )
-                if familias_e > 0:
-                    st.markdown(f"<small>{familias_e:,} famílias • {totais['E']/familias_e:.1f}/família</small>".replace(",", "."), unsafe_allow_html=True)
             
             # Divisor
             st.markdown("---")
             
-            # Resumo final
-            st.markdown(f"<h3 style='color: {COLORS['azul']}'>Resumo Final</h3>", unsafe_allow_html=True)
+            # Tabela detalhada
+            st.markdown(f"<h3 style='color: {COLORS['azul']}'>Detalhamento por Família</h3>", unsafe_allow_html=True)
             
-            col1, col2 = st.columns(2)
-            
-            with col1:
-                total_ativos = totais['A'] + totais['B'] + totais['C'] + totais['D']
-                familias_ativas = len(df_sem_total[
-                    (df_sem_total['A'] > 0) | 
-                    (df_sem_total['B'] > 0) | 
-                    (df_sem_total['C'] > 0) | 
-                    (df_sem_total['D'] > 0)
-                ])
-                st.metric(
-                    "Total Ativos (A+B+C+D)",
-                    f"{int(total_ativos):,}".replace(",", "."),
-                    f"{(total_ativos/total_requerentes*100):.1f}% dos requerentes",
-                    help="Total de requerentes ativos"
+            # Buscar nomes do Bitrix24
+            deals_df, deals_uf_df = get_bitrix_data()
+            if deals_df is not None and deals_uf_df is not None:
+                # Juntar com dados do Bitrix24
+                df_bitrix = pd.merge(
+                    deals_df[['ID', 'TITLE']],
+                    deals_uf_df[['DEAL_ID', 'UF_CRM_1722605592778']],
+                    left_on='ID',
+                    right_on='DEAL_ID',
+                    how='left'
                 )
-                if familias_ativas > 0:
-                    st.markdown(f"""
-                        <small>
-                            {familias_ativas:,} famílias ativas<br>
-                            {total_ativos/familias_ativas:.1f} requerentes/família<br>
-                            {(familias_ativas/total_familias*100):.1f}% das famílias
-                        </small>
-                    """.replace(",", "."), unsafe_allow_html=True)
-            
-            with col2:
-                st.metric(
-                    "Total Cancelados (E)",
-                    f"{int(totais['E']):,}".replace(",", "."),
-                    f"{(totais['E']/total_requerentes*100):.1f}% dos requerentes",
-                    help="Total de requerentes que cancelaram"
+                
+                # Preparar dados para exibição
+                df_detalhes = pd.merge(
+                    df_sem_total,
+                    df_bitrix[['UF_CRM_1722605592778', 'TITLE']],
+                    left_on='ID_Familia',
+                    right_on='UF_CRM_1722605592778',
+                    how='left'
                 )
-                if familias_e > 0:
-                    st.markdown(f"""
-                        <small>
-                            {familias_e:,} famílias canceladas<br>
-                            {totais['E']/familias_e:.1f} requerentes/família<br>
-                            {(familias_e/total_familias*100):.1f}% das famílias
-                        </small>
-                    """.replace(",", "."), unsafe_allow_html=True)
+                
+                # Usar TITLE do Bitrix24 se disponível, senão usar Nome_Familia
+                df_detalhes['Nome_Exibicao'] = df_detalhes['TITLE'].fillna(df_detalhes['Nome_Familia'])
+                
+                # Selecionar e renomear colunas
+                df_display = df_detalhes[[
+                    'Nome_Exibicao', 'A', 'B', 'C', 'D', 'E',
+                    'status_familia', 'total_requerentes_esperado'
+                ]].copy()
+                
+                df_display.columns = [
+                    'Família', 'A', 'B', 'C', 'D', 'E',
+                    'Status', 'Total Esperado'
+                ]
+                
+                # Adicionar totais
+                df_display['Total Atual'] = df_display[['A', 'B', 'C', 'D', 'E']].sum(axis=1)
+                df_display['Diferença'] = df_display['Total Esperado'] - df_display['Total Atual']
+                
+                # Ordenar por status e nome
+                df_display = df_display.sort_values(['Status', 'Família'])
+                
+                # Adicionar botão de download
+                csv = df_display.to_csv(index=False)
+                st.download_button(
+                    "📥 Download Relatório",
+                    csv,
+                    "status_familias.csv",
+                    "text/csv",
+                    key='download-csv'
+                )
+                
+                # Mostrar tabela
+                st.dataframe(df_display, use_container_width=True)
