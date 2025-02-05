@@ -72,27 +72,114 @@ def get_mysql_data():
             conn.close()
 
 def criar_relatorio_funil():
-    """Criar relatório otimizado do funil de famílias"""
+    """Criar relatório do funil de famílias focando no ID de família"""
     with st.spinner("Analisando dados do Bitrix24..."):
-        # Filtros de data
+        # 1. Consultar deals da categoria 32
+        filtros_deal = {
+            "dimensionsFilters": [[
+                {
+                    "fieldName": "CATEGORY_ID",
+                    "values": [32],
+                    "type": "INCLUDE",
+                    "operator": "EQUALS"
+                }
+            ]],
+            "fields": [
+                {"name": "ID"},
+                {"name": "TITLE"},
+                {"name": "STAGE_ID"},
+                {"name": "CATEGORY_ID"}
+            ]
+        }
+        
+        deals_df = consultar_bitrix("crm_deal", filtros_deal)
+        
+        if deals_df is None:
+            st.error("❌ Não foi possível obter os dados de deals")
+            return None
+            
+        # Converter para DataFrame
+        deals_df = pd.DataFrame(deals_df[1:], columns=deals_df[0])
+        total_categoria_32 = len(deals_df)
+        
+        # 2. Consultar campos personalizados (UF_CRM_1722605592778)
+        deals_uf = consultar_bitrix("crm_deal_uf")
+        if deals_uf is None:
+            st.error("❌ Não foi possível obter os dados complementares")
+            return None
+            
+        deals_uf_df = pd.DataFrame(deals_uf[1:], columns=deals_uf[0])
+        
+        # Filtrar apenas registros com UF_CRM_1722605592778 preenchido
+        deals_uf_df = deals_uf_df[
+            deals_uf_df['UF_CRM_1722605592778'].notna() & 
+            (deals_uf_df['UF_CRM_1722605592778'].astype(str) != '')
+        ]
+        
+        # Juntar os dados
+        df_completo = pd.merge(
+            deals_df,
+            deals_uf_df[['DEAL_ID', 'UF_CRM_1722605592778']],
+            left_on='ID',
+            right_on='DEAL_ID',
+            how='left'
+        )
+        
+        # Calcular métricas
+        total_deals = len(deals_df)
+        total_com_id = len(df_completo[df_completo['UF_CRM_1722605592778'].notna()])
+        
+        # Mostrar métricas em cards
         col1, col2 = st.columns(2)
+        
         with col1:
-            start_date = st.date_input(
-                "Data Inicial",
-                value=(datetime.now() - timedelta(days=30))
-            )
-        with col2:
-            end_date = st.date_input(
-                "Data Final",
-                value=datetime.now()
+            st.metric(
+                "Total na Categoria 32",
+                f"{total_deals:,}".replace(",", "."),
+                help="Total de deals na categoria 32"
             )
         
-        # 1. Consultar deals com filtros otimizados
-        deals_df = consultar_bitrix(
-            "crm_deal",
-            start_date=start_date.strftime("%Y-%m-%d"),
-            end_date=end_date.strftime("%Y-%m-%d")
+        with col2:
+            st.metric(
+                "Com ID de Família",
+                f"{total_com_id:,}".replace(",", "."),
+                f"{(total_com_id/total_deals*100):.1f}%",
+                help="Deals com ID de família preenchido (UF_CRM_1722605592778)"
+            )
+        
+        # Criar gráfico de funil
+        dados_funil = {
+            'Etapa': ['Total Categoria 32', 'Com ID de Família'],
+            'Quantidade': [total_deals, total_com_id]
+        }
+        
+        fig_funil = px.funnel(
+            dados_funil,
+            x='Quantidade',
+            y='Etapa',
+            title='Funil de Conversão - Categoria 32'
         )
+        
+        fig_funil.update_traces(
+            textinfo='value+percent initial',
+            hovertemplate="<b>%{y}</b><br>Quantidade: %{x}<br>Percentual: %{percentInitial:.1%}"
+        )
+        
+        st.plotly_chart(fig_funil, use_container_width=True)
+        
+        # Mostrar tabela com detalhes
+        if st.checkbox("Ver detalhes dos deals com ID de família"):
+            st.subheader("Deals com ID de Família")
+            df_detalhes = df_completo[
+                df_completo['UF_CRM_1722605592778'].notna()
+            ][['ID', 'TITLE', 'UF_CRM_1722605592778']].copy()
+            
+            df_detalhes.columns = ['ID do Deal', 'Título', 'ID da Família']
+            st.dataframe(
+                df_detalhes,
+                hide_index=True,
+                use_container_width=True
+            )
         
         if deals_df is None:
             st.error("❌ Não foi possível obter os dados de deals")
