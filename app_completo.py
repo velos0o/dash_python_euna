@@ -1,4 +1,3 @@
-@@ -4,32 +4,17 @@
 import mysql.connector
 import requests
 
