@@ -125,23 +125,34 @@ def criar_relatorio_funil():
                 user=st.secrets["mysql_user"],
                 password=st.secrets["mysql_password"]
             ) as conn:
-                # Query para análise de familiares
+                # Query para análise de familiares e membros
                 query = """
+                WITH membros_por_familia AS (
+                    SELECT 
+                        f.idfamilia,
+                        COUNT(DISTINCT m.unique_id) as total_membros,
+                        COUNT(CASE 
+                            WHEN f.paymentOption != 'E' AND (
+                                f.is_menor = 0 OR 
+                                (TIMESTAMPDIFF(YEAR, f.birthdate, CURDATE()) >= 12)
+                            ) THEN 1 
+                            END
+                        ) as total_requerentes_ativos,
+                        COUNT(CASE 
+                            WHEN f.paymentOption = 'E' THEN 1 
+                            END
+                        ) as total_requerentes_cancelados
+                    FROM euna_familias f
+                    LEFT JOIN familias m ON f.idfamilia = m.unique_id
+                    GROUP BY f.idfamilia
+                )
                 SELECT 
-                    f.idfamilia,
-                    COUNT(CASE 
-                        WHEN f.paymentOption != 'E' AND (
-                            f.is_menor = 0 OR 
-                            (TIMESTAMPDIFF(YEAR, f.birthdate, CURDATE()) >= 12)
-                        ) THEN 1 
-                        END
-                    ) as total_ativos,
-                    COUNT(CASE 
-                        WHEN f.paymentOption = 'E' THEN 1 
-                        END
-                    ) as total_cancelados
-                FROM euna_familias f
-                GROUP BY f.idfamilia
+                    idfamilia,
+                    total_membros,
+                    total_requerentes_ativos,
+                    total_requerentes_cancelados,
+                    (total_requerentes_ativos + total_requerentes_cancelados) as total_requerentes
+                FROM membros_por_familia
                 """
                 df_familias = pd.read_sql(query, conn)
         except Exception as e:
@@ -168,12 +179,14 @@ def criar_relatorio_funil():
         
         # Calcular métricas
         total_deals = len(deals_df)
-        total_com_conteudo = len(df_completo[df_completo['UF_CRM_1738699062493'].notna()])
-        total_ativos = df_completo['total_ativos'].sum()
-        total_cancelados = df_completo['total_cancelados'].sum()
+        total_com_id = len(df_completo[df_completo['UF_CRM_1722605592778'].notna()])
+        total_membros = df_familias['total_membros'].sum()
+        total_requerentes_ativos = df_familias['total_requerentes_ativos'].sum()
+        total_requerentes_cancelados = df_familias['total_requerentes_cancelados'].sum()
+        total_requerentes = total_requerentes_ativos + total_requerentes_cancelados
         
         # Mostrar métricas em cards
-        col1, col2, col3, col4 = st.columns(4)
+        col1, col2 = st.columns(2)
         
         with col1:
             st.metric(
@@ -184,23 +197,35 @@ def criar_relatorio_funil():
         
         with col2:
             st.metric(
-                "Com Conteúdo",
-                f"{total_com_conteudo:,}".replace(",", "."),
-                f"{(total_com_conteudo/total_deals*100):.1f}%",
-                help="Deals com conteúdo preenchido (UF_CRM_1738699062493)"
+                "Com ID de Família",
+                f"{total_com_id:,}".replace(",", "."),
+                f"{(total_com_id/total_deals*100):.1f}%",
+                help="Deals com ID de família preenchido (UF_CRM_1722605592778)"
+            )
+        
+        # Segunda linha de métricas
+        col1, col2, col3 = st.columns(3)
+        
+        with col1:
+            st.metric(
+                "Total de Membros",
+                f"{total_membros:,}".replace(",", "."),
+                help="Total de membros das famílias"
+            )
+        
+        with col2:
+            st.metric(
+                "Requerentes Ativos",
+                f"{total_requerentes_ativos:,}".replace(",", "."),
+                f"{(total_requerentes_ativos/total_requerentes*100):.1f}%",
+                help="Total de requerentes ativos (excluindo menores de 12 anos)"
             )
         
         with col3:
             st.metric(
-                "Requerentes Ativos",
-                f"{total_ativos:,}".replace(",", "."),
-                help="Total de requerentes ativos (excluindo menores de 12 anos)"
-            )
-        
-        with col4:
-            st.metric(
                 "Requerentes Cancelados",
-                f"{total_cancelados:,}".replace(",", "."),
+                f"{total_requerentes_cancelados:,}".replace(",", "."),
+                f"{(total_requerentes_cancelados/total_requerentes*100):.1f}%",
                 help="Total de requerentes cancelados"
             )
         
@@ -208,15 +233,15 @@ def criar_relatorio_funil():
         dados_funil = {
             'Etapa': [
                 'Total Categoria 32',
-                'Com Conteúdo',
-                'Requerentes Ativos',
-                'Requerentes Cancelados'
+                'Com ID de Família',
+                'Total de Membros',
+                'Total de Requerentes'
             ],
             'Quantidade': [
                 total_deals,
-                total_com_conteudo,
-                total_ativos,
-                total_cancelados
+                total_com_id,
+                total_membros,
+                total_requerentes
             ]
         }
         
@@ -238,21 +263,27 @@ def criar_relatorio_funil():
         if st.checkbox("Ver detalhes por família"):
             st.subheader("Detalhes por Família")
             
-            df_detalhes = df_completo[
-                df_completo['UF_CRM_1738699062493'].notna()
-            ][[
+            # Juntar dados do Bitrix24 com dados do MySQL
+            df_detalhes = pd.merge(
+                df_completo[['ID', 'TITLE', 'UF_CRM_1722605592778']],
+                df_familias,
+                left_on='UF_CRM_1722605592778',
+                right_on='idfamilia',
+                how='inner'
+            )
+            
+            # Selecionar e renomear colunas
+            df_detalhes = df_detalhes[[
                 'ID', 'TITLE', 'UF_CRM_1722605592778',
-                'total_ativos', 'total_cancelados'
+                'total_membros', 'total_requerentes_ativos',
+                'total_requerentes_cancelados', 'total_requerentes'
             ]].copy()
             
-            # Calcular total de requerentes
-            df_detalhes['total_requerentes'] = df_detalhes['total_ativos'] + df_detalhes['total_cancelados']
-            
-            # Renomear colunas
             df_detalhes.columns = [
                 'ID do Deal',
                 'Nome da Família',
                 'ID da Família',
+                'Total de Membros',
                 'Requerentes Ativos',
                 'Requerentes Cancelados',
                 'Total de Requerentes'
