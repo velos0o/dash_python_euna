@@ -4,6 +4,14 @@ import plotly.express as px
 import mysql.connector
 import requests
 
+# Cores
+COLORS = {
+    "verde": "#008C45",
+    "branco": "#FFFFFF",
+    "vermelho": "#CD212A",
+    "azul": "#003399"
+}
+
 # Configuração da página
 st.set_page_config(
     page_title="Eu na Europa - Sistema de Relatórios",
@@ -28,8 +36,8 @@ def get_mysql_data():
         query = """
         SELECT 
             idfamilia,
-            SUM(CASE WHEN paymentOption IN ('A', 'B', 'C', 'D') THEN 1 ELSE 0 END) as continua,
-            SUM(CASE WHEN paymentOption = 'E' THEN 1 ELSE 0 END) as cancelou,
+            SUM(CASE WHEN paymentOption IN ("A", "B", "C", "D") THEN 1 ELSE 0 END) as continua,
+            SUM(CASE WHEN paymentOption = "E" THEN 1 ELSE 0 END) as cancelou,
             COUNT(*) as total_membros
         FROM euna_familias
         WHERE is_menor = 0
@@ -44,12 +52,12 @@ def get_mysql_data():
         st.error(f"Erro ao conectar ao MySQL: {e}")
         return None
     finally:
-        if 'conn' in locals():
+        if "conn" in locals():
             conn.close()
 
 # Função para consultar Bitrix24
 def consultar_bitrix(table, filtros=None):
-    url = f"{st.secrets['bitrix24_base_url']}?token={st.secrets['bitrix24_token']}&table={table}"
+    url = f"{st.secrets["bitrix24_base_url"]}?token={st.secrets["bitrix24_token"]}&table={table}"
     if filtros:
         response = requests.post(url, json=filtros)
     else:
@@ -82,39 +90,39 @@ if df_mysql is not None:
         
         # Juntar dados do Bitrix24
         df_bitrix = pd.merge(
-            deals_df[['ID', 'TITLE']],
-            deals_uf_df[['DEAL_ID', 'UF_CRM_1722605592778']],
-            left_on='ID',
-            right_on='DEAL_ID',
-            how='left'
+            deals_df[["ID", "TITLE"]],
+            deals_uf_df[["DEAL_ID", "UF_CRM_1722605592778"]],
+            left_on="ID",
+            right_on="DEAL_ID",
+            how="left"
         )
         
         # Juntar com dados do MySQL
         df_final = pd.merge(
             df_mysql,
-            df_bitrix[['UF_CRM_1722605592778', 'TITLE']],
-            left_on='idfamilia',
-            right_on='UF_CRM_1722605592778',
-            how='left'
+            df_bitrix[["UF_CRM_1722605592778", "TITLE"]],
+            left_on="idfamilia",
+            right_on="UF_CRM_1722605592778",
+            how="left"
         )
         
         # Usar idfamilia quando não tiver TITLE
-        df_final['nome_familia'] = df_final['TITLE'].fillna(df_final['idfamilia'])
+        df_final["nome_familia"] = df_final["TITLE"].fillna(df_final["idfamilia"])
         
         # Selecionar colunas para exibição
         df_exibir = df_final[[
-            'nome_familia',
-            'continua',
-            'cancelou',
-            'total_membros'
+            "nome_familia",
+            "continua",
+            "cancelou",
+            "total_membros"
         ]].copy()
         
         # Renomear colunas
         df_exibir.columns = [
-            'Família',
-            'Ativos',
-            'Cancelados',
-            'Total'
+            "Família",
+            "Ativos",
+            "Cancelados",
+            "Total"
         ]
         
         # Métricas
@@ -129,13 +137,13 @@ if df_mysql is not None:
         with col2:
             st.metric(
                 "Famílias Ativas",
-                str(df_exibir['Ativos'].sum())
+                str(df_exibir["Ativos"].sum())
             )
         
         with col3:
             st.metric(
                 "Famílias Canceladas",
-                str(df_exibir['Cancelados'].sum())
+                str(df_exibir["Cancelados"].sum())
             )
         
         # Tabela de Detalhamento por Família
@@ -176,17 +184,17 @@ if df_mysql is not None:
             # Dropdown para selecionar o status
             status_selecionado = st.selectbox(
                 "Filtrar por Status:",
-                ['Todos', 'A', 'B', 'C', 'D', 'E']
+                ["Todos", "A", "B", "C", "D", "E"]
             )
             
             # Filtrando os dados
-            if status_selecionado != 'Todos':
-                df_status_filtrado = df_status[df_status['status'] == status_selecionado]
+            if status_selecionado != "Todos":
+                df_status_filtrado = df_status[df_status["status"] == status_selecionado]
             else:
                 df_status_filtrado = df_status
             
             # Renomeando colunas para exibição
-            df_status_filtrado.columns = ['ID Família', 'Status', 'Nome', 'Email', 'Telefone']
+            df_status_filtrado.columns = ["ID Família", "Status", "Nome", "Email", "Telefone"]
             
             # Mostrando a tabela
             if not df_status_filtrado.empty:
@@ -201,5 +209,5 @@ if df_mysql is not None:
         except Exception as e:
             st.error(f"Erro ao buscar dados de status: {e}")
         finally:
-            if 'conn' in locals():
+            if "conn" in locals():
                 conn.close()
