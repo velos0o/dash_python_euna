@@ -5,23 +5,18 @@ import plotly.graph_objects as go
 import requests
 import mysql.connector
 from datetime import datetime, timedelta
-import requests
 
 # Cores personalizadas
-# Cores
 COLORS = {
     'verde': '#008C45',  # Verde da bandeira italiana
-    'branco': '#FFFFFF', # Branco da bandeira italiana
+    'branco': '#FFFFFF', # Branco da bandeira italiana  
     'vermelho': '#CD212A', # Vermelho da bandeira italiana
     'azul': '#003399'    # Azul da bandeira da UE
-    'verde': '#008C45',
-    'branco': '#FFFFFF',
-    'vermelho': '#CD212A',
-    'azul': '#003399'
 }
 
 # Configuração da página
-@@ -21,62 +19,18 @@
+st.set_page_config(
+    page_title="Sistema de Relatórios - Eu na Europa",
     layout="wide"
 )
 
@@ -48,6 +43,7 @@ st.markdown(
     """,
     unsafe_allow_html=True
 )
+
 # Cabeçalho
 st.markdown(
     f"""
@@ -60,15 +56,16 @@ st.markdown(
     """,
     unsafe_allow_html=True
 )
+
 # Configurações do Bitrix24 (usando secrets)
 BITRIX_BASE_URL = st.secrets["bitrix24_base_url"]
 BITRIX_TOKEN = st.secrets["bitrix24_token"]
+
 # Funções
 def consultar_bitrix(table, filtros=None):
     """Função para consultar a API do Bitrix24"""
     url = f"{BITRIX_BASE_URL}?token={BITRIX_TOKEN}&table={table}"
     
-    url = f"{st.secrets['bitrix24_base_url']}?token={st.secrets['bitrix24_token']}&table={table}"
     if filtros:
         response = requests.post(url, json=filtros)
     else:
@@ -83,7 +80,7 @@ def get_mysql_data():
     try:
         conn = mysql.connector.connect(
             host=st.secrets["mysql_host"],
-@@ -85,7 +39,6 @@ def get_mysql_data():
+            database=st.secrets["mysql_database"],
             user=st.secrets["mysql_user"],
             password=st.secrets["mysql_password"]
         )
@@ -91,7 +88,11 @@ def get_mysql_data():
         query = """
         SELECT 
             idfamilia,
-@@ -98,7 +51,6 @@ def get_mysql_data():
+            SUM(continua)   AS continua,
+            SUM(cancelou)  AS cancelou,
+            COUNT(idfamilia) AS total_membros  
+        FROM v_status_requerentes
+         WHERE cadastro >= DATE_SUB(CURDATE(), INTERVAL 180 DAY)
           AND hasTechnicalProblems = 0
         GROUP BY idfamilia
         """
@@ -99,7 +100,8 @@ def get_mysql_data():
         df = pd.read_sql(query, conn)
         return df
     except Exception as e:
-@@ -108,160 +60,73 @@ def get_mysql_data():
+        st.error(f"Erro ao buscar dados do MySQL: {e}")
+    finally:
         if 'conn' in locals():
             conn.close()
 
@@ -108,29 +110,13 @@ relatorio_selecionado = st.sidebar.selectbox(
     "Selecione o Relatório",
     ["Status das Famílias", "Funil de Famílias"]
 )
-# Título
-st.title("Status das Famílias")
-# Carregar dados
-df_mysql = get_mysql_data()
 
 if relatorio_selecionado == "Status das Famílias":
     st.markdown(f"<h2 style='color: {COLORS['azul']}'>Status das Famílias</h2>", unsafe_allow_html=True)
-if df_mysql is not None:
-    # Buscar dados do Bitrix24
-    filtros_deal = {
-        "dimensionsFilters": [[{
-            "fieldName": "CATEGORY_ID",
-            "values": [32],
-            "type": "INCLUDE",
-            "operator": "EQUALS"
-        }]]
-    }
-
+    
     # Carregar dados do MySQL
     df_mysql = get_mysql_data()
-    deals_data = consultar_bitrix("crm_deal", filtros_deal)
-    deals_uf = consultar_bitrix("crm_deal_uf")
-
+    
     if df_mysql is not None:
         # Buscar nomes das famílias no Bitrix24
         filtros_deal = {
@@ -143,37 +129,10 @@ if df_mysql is not None:
                 }
             ]]
         }
-    if deals_data and deals_uf:
-        # Preparar dados do Bitrix24
-        deals_df = pd.DataFrame(deals_data[1:], columns=deals_data[0])
-        deals_uf_df = pd.DataFrame(deals_uf[1:], columns=deals_uf[0])
         
-        # Juntar dados
-        df_bitrix = pd.merge(
-            deals_df[['ID', 'TITLE']],
-            deals_uf_df[['DEAL_ID', 'UF_CRM_1722605592778']],
-            left_on='ID',
-            right_on='DEAL_ID',
-            how='left'
-        )
-        
-        # Relatório final
-        df_report = pd.merge(
-            df_mysql,
-            df_bitrix[['UF_CRM_1722605592778', 'TITLE']],
-            left_on='idfamilia',
-            right_on='UF_CRM_1722605592778',
-            how='left'
-        )
-        
-        # Usar idfamilia quando não tiver TITLE
-        df_report['TITLE'] = df_report['TITLE'].fillna(df_report['idfamilia'])
-
         deals_data = consultar_bitrix("crm_deal", filtros_deal)
         deals_uf = consultar_bitrix("crm_deal_uf")
-        # Métricas
-        col1, col2, col3 = st.columns(3)
-
+        
         if deals_data and deals_uf:
             # Converter para DataFrames
             deals_df = pd.DataFrame(deals_data[1:], columns=deals_data[0])
@@ -186,10 +145,6 @@ if df_mysql is not None:
                 left_on='ID',
                 right_on='DEAL_ID',
                 how='left'
-        with col1:
-            st.metric(
-                "Total de Famílias",
-                str(len(df_report))
             )
             
             # Criar relatório final
@@ -199,11 +154,6 @@ if df_mysql is not None:
                 left_on='idfamilia',
                 right_on='UF_CRM_1722605592778',
                 how='left'
-        
-        with col2:
-            st.metric(
-                "Famílias Ativas",
-                str(df_report['continua'].sum())
             )
             
             df_report['TITLE'] = df_report['TITLE'].fillna(df_report['idfamilia'])
@@ -283,11 +233,6 @@ if df_mysql is not None:
                 "status_familias.csv",
                 "text/csv",
                 key='download-csv'
-        
-        with col3:
-            st.metric(
-                "Famílias Canceladas",
-                str(df_report['cancelou'].sum())
             )
             
             # Mostrar tabela
@@ -317,7 +262,3 @@ if df_mysql is not None:
                     )
                 }
             )
-        
-        # Tabela
-        st.markdown("### Detalhamento por Família")
-        st.dataframe(df_report)
