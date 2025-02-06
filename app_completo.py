@@ -23,17 +23,44 @@ def get_database_connection():
         st.error(f"Erro ao conectar ao banco de dados: {e}")
         return None
 
-def get_familias_status():
+def get_dados_grafico():
     connection = get_database_connection()
     if connection is None:
         return None
 
     query = """
-    WITH FamiliaStatus AS (
+    SELECT 
+        DATE(createdAt) as data,
+        HOUR(createdAt) as hora,
+        COUNT(DISTINCT id) as total_ids
+    FROM whatsapp_euna_data.euna_familias
+    WHERE is_menor = 0 AND isSpecial = 0 AND hasTechnicalProblems = 0
+    GROUP BY DATE(createdAt), HOUR(createdAt)
+    ORDER BY data, hora
+    """
+
+    try:
+        df = pd.read_sql(query, connection)
+        return df
+    except Error as e:
+        st.error(f"Erro ao executar query do gráfico: {e}")
+        return None
+    finally:
+        if connection.is_connected():
+            connection.close()
+
+def get_familias_status():
+    connection = get_database_connection()
+    if connection is None:
+        return None
+
+    # Query principal
+    query = """
+    WITH FamiliaDetalhes AS (
+        -- Primeiro, obtemos os dados por família
         SELECT 
             e.idfamilia AS ID_Familia,
             COALESCE(f.nome_familia, 'Sem Nome') AS Nome_Familia,
-            COUNT(DISTINCT e.id) AS Total_Requerentes,
             SUM(CASE WHEN e.paymentOption = 'A' THEN 1 ELSE 0 END) AS A,
             SUM(CASE WHEN e.paymentOption = 'B' THEN 1 ELSE 0 END) AS B,
             SUM(CASE WHEN e.paymentOption = 'C' THEN 1 ELSE 0 END) AS C,
@@ -44,40 +71,44 @@ def get_familias_status():
             COUNT(DISTINCT e.id) AS Requerentes_Preencheram,
             (SELECT COUNT(DISTINCT unique_id) 
              FROM whatsapp_euna_data.familiares f2 
-             WHERE f2.familia = e.idfamilia) AS Requerentes_Banco
+             WHERE f2.familia = e.idfamilia 
+             AND f2.is_conjuge = 0 
+             AND f2.is_italiano = 0
+             AND f2.is_menor = 0) AS Requerentes_Maiores,
+            (SELECT COUNT(DISTINCT unique_id) 
+             FROM whatsapp_euna_data.familiares f2 
+             WHERE f2.familia = e.idfamilia 
+             AND f2.is_menor = 1) AS Requerentes_Menores,
+            (SELECT COUNT(DISTINCT unique_id) 
+             FROM whatsapp_euna_data.familiares f2 
+             WHERE f2.familia = e.idfamilia) AS Total_Banco
         FROM whatsapp_euna_data.euna_familias e
         LEFT JOIN whatsapp_euna_data.familias f ON TRIM(e.idfamilia) = TRIM(f.unique_id)
         WHERE e.is_menor = 0 AND e.isSpecial = 0 AND e.hasTechnicalProblems = 0
         GROUP BY e.idfamilia, f.nome_familia
-
-        UNION ALL
-
+    ),
+    TotalGeral AS (
+        -- Depois, calculamos o total geral
         SELECT 
             'TOTAL' AS ID_Familia,
             'Total' AS Nome_Familia,
-            COUNT(DISTINCT idfamilia) AS Total_Requerentes,
-            SUM(CASE WHEN paymentOption = 'A' THEN 1 ELSE 0 END) AS A,
-            SUM(CASE WHEN paymentOption = 'B' THEN 1 ELSE 0 END) AS B,
-            SUM(CASE WHEN paymentOption = 'C' THEN 1 ELSE 0 END) AS C,
-            SUM(CASE WHEN paymentOption = 'D' THEN 1 ELSE 0 END) AS D,
-            SUM(CASE WHEN paymentOption = 'E' THEN 1 ELSE 0 END) AS E,
-            SUM(CASE WHEN paymentOption IN ('A','B','C','D') THEN 1 ELSE 0 END) AS Requerentes_Continuar,
-            SUM(CASE WHEN paymentOption = 'E' THEN 1 ELSE 0 END) AS Requerentes_Cancelar,
-            COUNT(DISTINCT id) AS Requerentes_Preencheram,
-            (SELECT COUNT(DISTINCT unique_id) FROM whatsapp_euna_data.familiares) AS Requerentes_Banco
-        FROM whatsapp_euna_data.euna_familias
-        WHERE is_menor = 0 AND isSpecial = 0 AND hasTechnicalProblems = 0
+            SUM(A) AS A,
+            SUM(B) AS B,
+            SUM(C) AS C,
+            SUM(D) AS D,
+            SUM(E) AS E,
+            SUM(Requerentes_Continuar) AS Requerentes_Continuar,
+            SUM(Requerentes_Cancelar) AS Requerentes_Cancelar,
+            SUM(Requerentes_Preencheram) AS Requerentes_Preencheram,
+            SUM(Requerentes_Maiores) AS Requerentes_Maiores,
+            SUM(Requerentes_Menores) AS Requerentes_Menores,
+            SUM(Total_Banco) AS Total_Banco
+        FROM FamiliaDetalhes
     )
-    SELECT 
-        ID_Familia,
-        Nome_Familia,
-        Total_Requerentes,
-        A, B, C, D, E,
-        Requerentes_Continuar,
-        Requerentes_Cancelar,
-        Requerentes_Preencheram,
-        Requerentes_Banco
-    FROM FamiliaStatus
+    -- União dos resultados
+    SELECT * FROM FamiliaDetalhes
+    UNION ALL
+    SELECT * FROM TotalGeral
     ORDER BY CASE WHEN Nome_Familia = 'Total' THEN 1 ELSE 0 END, ID_Familia;
     """
 
@@ -136,7 +167,7 @@ def show_status_familias():
                 st.markdown(f"""
                     <div class='metric-card'>
                         <div class='metric-label'>Requerentes Continuar</div>
-                        <div class='metric-value'>{total_row['Requerentes_Continuar']}</div>
+                        <div class='metric-value'>{int(total_row['Requerentes_Continuar'])}</div>
                         <div style='color: var(--texto); opacity: 0.7; font-size: 0.875rem;'>
                             Escolheram opções A, B, C ou D
                         </div>
@@ -147,7 +178,7 @@ def show_status_familias():
                 st.markdown(f"""
                     <div class='metric-card'>
                         <div class='metric-label'>Requerentes Cancelar</div>
-                        <div class='metric-value'>{total_row['Requerentes_Cancelar']}</div>
+                        <div class='metric-value'>{int(total_row['Requerentes_Cancelar'])}</div>
                         <div style='color: var(--texto); opacity: 0.7; font-size: 0.875rem;'>
                             Escolheram opção E
                         </div>
@@ -162,7 +193,7 @@ def show_status_familias():
             opcoes = ['A', 'B', 'C', 'D', 'E']
             colunas = [col1, col2, col3, col4, col5]
             
-            total_requerentes = total_row['Total_Requerentes']
+            total_requerentes = total_row['Total_Banco']
             
             for opcao, col in zip(opcoes, colunas):
                 with col:
@@ -171,9 +202,9 @@ def show_status_familias():
                     st.markdown(f"""
                         <div class='metric-card'>
                             <div class='metric-label'>Opção {opcao}</div>
-                            <div class='metric-value'>{valor}</div>
+                            <div class='metric-value'>{int(valor)}</div>
                             <div style='color: var(--texto); opacity: 0.7; font-size: 0.875rem;'>
-                                {percentual:.1f}% do total de requerentes
+                                {int(percentual)}% do total de requerentes
                             </div>
                         </div>
                     """, unsafe_allow_html=True)
@@ -183,25 +214,126 @@ def show_status_familias():
             st.subheader("Detalhamento por Família")
             
             # Preparar dados para a tabela
-            df_display = df_status[df_status['Nome_Familia'] != 'Total'].copy()
+            df_display = df_status.copy()
             
-            # Renomear e reorganizar colunas para a tabela final
-            df_display = df_display[[
-                'Nome_Familia', 
-                'Requerentes_Continuar',
-                'Requerentes_Cancelar',
-                'Requerentes_Preencheram',
-                'Requerentes_Banco'
-            ]].rename(columns={
-                'Nome_Familia': 'Família',
-                'Requerentes_Continuar': 'Requerentes Continuar',
-                'Requerentes_Cancelar': 'Requerentes Cancelar',
-                'Requerentes_Preencheram': 'Requerentes que Preencheram',
-                'Requerentes_Banco': 'Requerentes no Banco'
+            # Criar matriz de dados
+            matriz_data = []
+            total_row = df_display[df_display['Nome_Familia'] == 'Total'].iloc[0]
+            
+            for _, row in df_display[df_display['Nome_Familia'] != 'Total'].iterrows():
+                linha = {
+                    'Família': row['Nome_Familia'],
+                    'Requerentes Continuar': int(row['Requerentes_Continuar']),
+                    'Requerentes Cancelar': int(row['Requerentes_Cancelar']),
+                    'Requerentes Maiores': int(row['Requerentes_Maiores']),
+                    'Requerentes Menores': int(row['Requerentes_Menores']),
+                    'Total de Requerentes': int(row['Total_Banco'])
+                }
+                matriz_data.append(linha)
+            
+            # Adicionar linha de totais
+            matriz_data.append({
+                'Família': 'Total',
+                'Requerentes Continuar': int(total_row['Requerentes_Continuar']),
+                'Requerentes Cancelar': int(total_row['Requerentes_Cancelar']),
+                'Requerentes Maiores': int(total_row['Requerentes_Maiores']),
+                'Requerentes Menores': int(total_row['Requerentes_Menores']),
+                'Total de Requerentes': int(total_row['Total_Banco'])
             })
             
-            # Botões de download
+            # Converter para DataFrame
+            df_display = pd.DataFrame(matriz_data)
+            
+            # Exibir tabela
+            st.dataframe(
+                df_display.style.set_properties(**{
+                    'background-color': 'white',
+                    'color': '#000000',
+                    'font-size': '14px',
+                    'font-weight': '400',
+                    'min-width': '100px'
+                }).format({
+                    'Requerentes Continuar': '{:,.0f}',
+                    'Requerentes Cancelar': '{:,.0f}',
+                    'Requerentes Maiores': '{:,.0f}',
+                    'Requerentes Menores': '{:,.0f}',
+                    'Total de Requerentes': '{:,.0f}'
+                }),
+                use_container_width=True,
+                height=400
+            )
+
+            # Gráfico de evolução
+            st.markdown("<div style='height: 30px;'></div>", unsafe_allow_html=True)
+            st.subheader("Evolução de Requerentes")
+            
+            df_grafico = get_dados_grafico()
+            if df_grafico is not None:
+                # Criar coluna de data/hora formatada
+                df_grafico['data_hora'] = df_grafico.apply(
+                    lambda x: f"{x['data'].strftime('%d/%m/%Y')} {x['hora']:02d}h", 
+                    axis=1
+                )
+
+                fig = px.line(df_grafico, 
+                            x='data_hora', 
+                            y='total_ids',
+                            title='Evolução do Número de Requerentes por Hora',
+                            labels={'data_hora': 'Data e Hora', 'total_ids': 'Total de Requerentes'})
+                
+                # Adicionar pontos
+                fig.add_trace(px.scatter(df_grafico, x='data_hora', y='total_ids').data[0])
+                
+                # Adicionar os números acima dos pontos
+                for i, row in df_grafico.iterrows():
+                    if row['total_ids'] > 0:  # Só mostra números > 0
+                        fig.add_annotation(
+                            x=row['data_hora'],
+                            y=row['total_ids'],
+                            text=str(int(row['total_ids'])),
+                            yshift=10,
+                            showarrow=False,
+                            font=dict(size=12)
+                        )
+                
+                # Melhorar o layout
+                fig.update_layout(
+                    plot_bgcolor='white',
+                    paper_bgcolor='white',
+                    font=dict(size=14),
+                    height=400,
+                    xaxis=dict(
+                        tickangle=45,
+                        tickfont=dict(size=12),
+                        gridcolor='lightgray'
+                    ),
+                    yaxis=dict(
+                        gridcolor='lightgray',
+                        zeroline=True,
+                        zerolinecolor='lightgray'
+                    ),
+                    showlegend=False
+                )
+                
+                # Atualizar linhas e pontos
+                fig.update_traces(
+                    line=dict(width=2),
+                    marker=dict(size=8)
+                )
+                
+                fig.update_layout(
+                    plot_bgcolor='white',
+                    paper_bgcolor='white',
+                    font=dict(size=14),
+                    height=400
+                )
+                
+                st.plotly_chart(fig, use_container_width=True)
+
+            # Botões de download no final da página
+            st.markdown("<div style='height: 30px;'></div>", unsafe_allow_html=True)
             col1, col2, col3 = st.columns([1, 1, 4])
+            
             with col1:
                 csv = df_display.to_csv(index=False).encode('utf-8')
                 st.download_button(
@@ -230,28 +362,47 @@ def show_status_familias():
             st.markdown("""
                 <style>
                     .element-container iframe {
-                        height: 600px !important;
+                        height: 800px !important;
                     }
                     .dataframe {
-                        font-size: 14px !important;
+                        font-size: 16px !important;
                         background-color: white !important;
                         border-radius: 10px !important;
                         overflow: hidden !important;
+                        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1) !important;
                     }
                     .dataframe th {
+                        position: sticky !important;
+                        top: 0 !important;
                         background-color: var(--azul) !important;
                         color: white !important;
                         font-weight: bold !important;
                         text-align: left !important;
-                        padding: 15px !important;
+                        padding: 20px !important;
+                        font-size: 18px !important;
+                        white-space: nowrap !important;
+                        z-index: 1 !important;
                     }
                     .dataframe td {
-                        padding: 12px 15px !important;
-                        line-height: 1.4 !important;
+                        padding: 16px 20px !important;
+                        line-height: 1.6 !important;
                         border-bottom: 1px solid #f0f0f0 !important;
+                        white-space: nowrap !important;
                     }
                     .dataframe tr:hover td {
                         background-color: #f8f9fa !important;
+                    }
+                    .dataframe tr:last-child {
+                        position: sticky !important;
+                        bottom: 0 !important;
+                        background-color: white !important;
+                        border-top: 2px solid var(--azul) !important;
+                        font-weight: bold !important;
+                        z-index: 1 !important;
+                    }
+                    .dataframe tr:last-child td {
+                        background-color: white !important;
+                        border-bottom: none !important;
                     }
                 </style>
             """, unsafe_allow_html=True)
@@ -266,10 +417,16 @@ def show_status_familias():
                     'font-weight': '400',
                     'min-width': '100px'
                 }).format({
+                    'A': '{}',
+                    'B': '{}',
+                    'C': '{}',
+                    'D': '{}',
+                    'E': '{}',
                     'Requerentes Continuar': '{:,.0f}',
                     'Requerentes Cancelar': '{:,.0f}',
-                    'Requerentes que Preencheram': '{:,.0f}',
-                    'Requerentes no Banco': '{:,.0f}'
+                    'Requerentes Maiores': '{:,.0f}',
+                    'Requerentes Menores': '{:,.0f}',
+                    'Total de Requerentes': '{:,.0f}'
                 }),
                 use_container_width=True,
                 height=600
