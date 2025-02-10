@@ -702,6 +702,7 @@ COLORS = {
     "texto": "#1E3A8A"       # Texto principal
 }
 
+feature/update-interface-streamlit
 # Carregar o logo para usar como ícone
 def get_base64_logo():
     try:
@@ -735,6 +736,8 @@ if logo_base64:
         </div>
     """, unsafe_allow_html=True)
 )
+
+
 
 # Injetar CSS personalizado
 st.markdown("""
@@ -1283,3 +1286,35 @@ elif tipo_relatorio == "Análise Funil Bitrix24":
     except Exception as e:
         status_container.error(f"Erro ao processar dados: {str(e)}")
         st.stop()
+# Carregar o logo para usar como ícone
+def get_base64_logo():
+    try:
+        with open('assets/logo.svg', 'rb') as f:
+            return base64.b64encode(f.read()).decode()
+    except Exception as e:
+        print(f"Erro ao carregar logo: {e}")
+        return None
+
+# Configuração da página
+st.set_page_config(
+    page_title="Eu na Europa",
+    page_icon="🇪🇺",  # Usando emoji da UE como ícone
+    layout="wide",
+    initial_sidebar_state="expanded")
+
+# Carregar e exibir o logo
+logo_base64 = get_base64_logo()
+if logo_base64:
+    # Logo no título
+    st.markdown(f"""
+        <div style='text-align: center; margin-bottom: 2rem;'>
+            <img src="data:image/svg+xml;base64,{logo_base64}" width="200" style="margin-bottom: 1rem;">
+        </div>
+    """, unsafe_allow_html=True)
+    
+    # Logo no sidebar com fundo branco
+    st.sidebar.markdown(f"""
+        <div style='text-align: center; margin-bottom: 1rem; padding: 1rem; background: white; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);'>
+            <img src="data:image/svg+xml;base64,{logo_base64}" width="120" height="120" style="margin-bottom: 0.5rem;">
+        </div>
+    """, unsafe_allow_html=True)
