@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="200" height="200" viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
+  <!-- Fundo azul -->
+  <rect width="200" height="200" fill="#003399"/>
+  
+  <!-- Texto EU NA -->
+  <text x="100" y="80" font-family="Montserrat" font-size="40" font-weight="bold" fill="white" text-anchor="middle">EU NA</text>
+  
+  <!-- Texto EUROPA -->
+  <text x="100" y="130" font-family="Montserrat" font-size="40" font-weight="bold" fill="#FFD700" text-anchor="middle">EUROPA</text>
+  
+  <!-- Estrelas -->
+  <g fill="#FFD700">
+    <circle cx="40" cy="40" r="5"/>
+    <circle cx="160" cy="40" r="5"/>
+    <circle cx="40" cy="160" r="5"/>
+    <circle cx="160" cy="160" r="5"/>
+    <circle cx="100" cy="30" r="5"/>
+    <circle cx="100" cy="170" r="5"/>
+    <circle cx="30" cy="100" r="5"/>
+    <circle cx="170" cy="100" r="5"/>
+  </g>
+</svg>
