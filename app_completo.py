@@ -27,27 +27,11 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="expanded"
 )
-import streamlit as st
-import pandas as pd
-import plotly.express as px
-import mysql.connector
-from mysql.connector import Error
-import requests
-import json
-import time
-import io
-from datetime import datetime, timedelta
 
-# Configurações básicas do Streamlit
-st.set_page_config(
-    page_title="Eu na Europa - Sistema de Relatórios",
-    page_icon="🌍",
-    layout="wide",
-    initial_sidebar_state="expanded"
-)
 """
 Eu na Europa - Sistema de Relatórios
 Versão consolidada para Streamlit Cloud
+"""
 """
 import streamlit as st
 import pandas as pd
