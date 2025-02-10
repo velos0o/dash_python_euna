@@ -37,15 +37,18 @@ PAYMENT_OPTIONS_COLORS = {
 # Funções de banco de dados
 def get_database_connection():
     try:
-        connection = mysql.connector.connect(
-            host='database-1.cdqa6ywqs8pz.us-west-2.rds.amazonaws.com',
-            port=3306,
-            database='whatsapp_euna_data',
-            user='lucas',
-            password='a9!o98Q80$MM'
+        from sqlalchemy import create_engine
+        engine = create_engine(
+            'mysql+mysqlconnector://{user}:{password}@{host}:{port}/{database}'.format(
+                user='lucas',
+                password='a9!o98Q80$MM',
+                host='database-1.cdqa6ywqs8pz.us-west-2.rds.amazonaws.com',
+                port=3306,
+                database='whatsapp_euna_data'
+            )
         )
-        return connection
-    except Error as e:
+        return engine
+    except Exception as e:
         st.error(f"Erro ao conectar ao banco de dados: {e}")
         return None
 
