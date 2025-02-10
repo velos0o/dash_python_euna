@@ -1,16 +1,6 @@
 import streamlit as st
-import pandas as pd
-import plotly.express as px
-import mysql.connector
-from mysql.connector import Error
-import requests
-import json
-import time
-import io
 import base64
-from datetime import datetime, timedelta
 
-# Carregar o logo para usar como ícone
 def get_logo_base64():
     try:
         with open("logo.svg.svg", "rb") as f:
@@ -19,7 +9,6 @@ def get_logo_base64():
         print(f"Erro ao carregar logo: {e}")
         return None
 
-# Configurações básicas do Streamlit
 logo_base64 = get_logo_base64()
 st.set_page_config(
     page_title="Eu na Europa - Sistema de Relatórios",
@@ -28,6 +17,12 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Importar e executar o aplicativo principal
-from app_completo import main
-main()
+if logo_base64:
+    st.sidebar.markdown(f"""
+        <div style="text-align: center; margin-bottom: 1rem; padding: 1rem;">
+            <img src="data:image/svg+xml;base64,{logo_base64}" width="180" height="180" style="margin-bottom: 0.5rem;">
+        </div>
+    """, unsafe_allow_html=True)
+
+st.title("Eu na Europa - Sistema de Relatórios")
+st.write("Versão de teste")
